@@ -1,0 +1,32 @@
+[Unit]
+Description=PP private calendar
+After=network.target
+
+[Service]
+Type=simple
+User=pp-calendar
+Group=pp-calendar
+WorkingDirectory=/srv/workspace/pp-calendar
+EnvironmentFile=/etc/pp-calendar.env
+ExecStart=/srv/workspace/pp-calendar/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8771 --workers 1 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+ReadWritePaths=/srv/data/pp-calendar
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
+

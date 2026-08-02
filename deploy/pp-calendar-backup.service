@@ -1,0 +1,15 @@
+[Unit]
+Description=Back up PP Calendar SQLite database
+After=pp-calendar.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/libexec/pp-calendar-backup
+User=root
+Group=root
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/data/pp-calendar /srv/backups/pp-calendar
+UMask=0077

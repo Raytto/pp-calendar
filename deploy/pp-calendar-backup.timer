@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily PP Calendar backup
+
+[Timer]
+OnCalendar=*-*-* 03:26:00
+Persistent=true
+RandomizedDelaySec=10m
+Unit=pp-calendar-backup.service
+
+[Install]
+WantedBy=timers.target
+

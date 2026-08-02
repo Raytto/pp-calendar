@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0f1120">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>PP Calendar</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/styles.css?v=1">
+</head>
+<body>
+  <div id="loginView" class="login-page" hidden>
+    <main class="login-card">
+      <div class="brand-mark large" aria-hidden="true"><span>PP</span></div>
+      <div class="login-heading">
+        <p class="eyebrow">PRIVATE CALENDAR</p>
+        <h1>欢迎回来</h1>
+        <p>过去有迹可循，未来心中有数。</p>
+      </div>
+      <form id="loginForm">
+        <label>用户名<input id="loginUsername" name="username" autocomplete="username" required></label>
+        <label>密码<input id="loginPassword" name="password" type="password" autocomplete="current-password" required></label>
+        <p id="loginError" class="form-error" role="alert" hidden></p>
+        <button class="primary-button" type="submit">进入我的日历</button>
+      </form>
+      <p class="privacy-note">仅供 PP 私人使用</p>
+    </main>
+  </div>
+
+  <div id="appView" class="app-shell" hidden>
+    <header class="topbar">
+      <div class="topbar-left">
+        <button id="menuButton" class="icon-button mobile-only" aria-label="打开菜单">☰</button>
+        <div class="wordmark"><div class="brand-mark">PP</div><strong>Calendar</strong></div>
+        <button id="todayButton" class="outline-button">今天</button>
+        <div class="month-navigation">
+          <button id="prevButton" class="icon-button" aria-label="上个月">‹</button>
+          <button id="nextButton" class="icon-button" aria-label="下个月">›</button>
+        </div>
+        <div><h1 id="monthTitle"></h1><p id="monthSubtitle">月视图 · 按天记录</p></div>
+      </div>
+      <div class="topbar-actions">
+        <button id="searchButton" class="icon-button" aria-label="搜索">⌕</button>
+        <button id="newEventButton" class="primary-button compact">＋ 新建</button>
+        <button id="accountButton" class="avatar-button" aria-label="账号菜单">PP</button>
+      </div>
+      <div id="accountMenu" class="account-menu" hidden>
+        <strong>PP</strong><span>私人日历</span>
+        <button id="logoutButton">退出登录</button>
+      </div>
+    </header>
+
+    <div class="content-shell">
+      <aside id="sidebar" class="sidebar">
+        <button id="sidebarCreate" class="create-button">＋<span>创建事件</span></button>
+        <section class="mini-calendar-section">
+          <div class="section-heading"><strong id="miniTitle"></strong></div>
+          <div class="mini-week"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+          <div id="miniCalendar" class="mini-grid"></div>
+        </section>
+        <section class="calendar-list-section">
+          <div class="section-heading"><strong>我的日历</strong><button id="manageCalendarsButton" class="icon-button" aria-label="管理日历">＋</button></div>
+          <div id="calendarFilters" class="calendar-filters"></div>
+        </section>
+        <div class="sidebar-spacer"></div>
+        <p class="sidebar-note">记录发生，也安排期待。</p>
+      </aside>
+      <button id="sidebarBackdrop" class="sidebar-backdrop" aria-label="关闭菜单" hidden></button>
+
+      <main class="workspace">
+        <section id="calendarView" class="calendar-view">
+          <div class="weekday-row"><span>周一</span><span>周二</span><span>周三</span><span>周四</span><span>周五</span><span>周六</span><span>周日</span></div>
+          <div id="monthGrid" class="month-grid" aria-label="月历"></div>
+        </section>
+        <section id="searchView" class="search-view" hidden>
+          <div class="search-header">
+            <button id="closeSearch" class="icon-button" aria-label="返回月历">←</button>
+            <label class="search-field"><span>⌕</span><input id="searchInput" placeholder="搜索标题、备注或日历" autocomplete="off"></label>
+          </div>
+          <div id="searchSummary" class="search-summary"></div>
+          <div id="searchResults" class="search-results"></div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <dialog id="eventDialog" class="modal event-modal">
+    <form id="eventForm" method="dialog">
+      <div class="modal-heading">
+        <div><p class="eyebrow">DAY EVENT</p><h2 id="eventDialogTitle">新建事件</h2></div>
+        <button class="icon-button close-dialog" type="button" aria-label="关闭">×</button>
+      </div>
+      <label class="title-field"><span>标题</span><input id="eventTitle" maxlength="200" placeholder="添加标题" required></label>
+      <div class="field-grid">
+        <label><span>日期</span><input id="eventDate" type="date" required></label>
+        <label><span>所属日历</span><select id="eventCalendar" required></select></label>
+      </div>
+      <label><span>备注</span><textarea id="eventNotes" maxlength="10000" rows="7" placeholder="记录这一天的细节…"></textarea></label>
+      <p id="eventError" class="form-error" role="alert" hidden></p>
+      <div class="modal-actions">
+        <button id="deleteEventButton" class="danger-button" type="button" hidden>删除</button>
+        <span></span>
+        <button class="text-button close-dialog" type="button">取消</button>
+        <button class="primary-button compact" type="submit">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="detailDialog" class="modal detail-modal">
+    <div class="modal-heading">
+      <p class="eyebrow">EVENT DETAIL</p>
+      <button class="icon-button close-dialog" type="button" aria-label="关闭">×</button>
+    </div>
+    <div class="detail-title-row"><span id="detailColor" class="detail-color"></span><h2 id="detailTitle"></h2></div>
+    <dl class="detail-list">
+      <div><dt>日期</dt><dd id="detailDate"></dd></div>
+      <div><dt>日历</dt><dd id="detailCalendar"></dd></div>
+      <div><dt>备注</dt><dd id="detailNotes" class="detail-notes"></dd></div>
+    </dl>
+    <div class="modal-actions"><span></span><button id="editEventButton" class="primary-button compact">编辑事件</button></div>
+  </dialog>
+
+  <dialog id="calendarDialog" class="modal calendar-modal">
+    <div class="modal-heading">
+      <div><p class="eyebrow">MY CALENDARS</p><h2>管理日历</h2></div>
+      <button class="icon-button close-dialog" type="button" aria-label="关闭">×</button>
+    </div>
+    <div id="calendarManageList" class="calendar-manage-list"></div>
+    <form id="calendarForm" class="calendar-create-form">
+      <input id="calendarName" maxlength="60" placeholder="新日历名称" required>
+      <input id="calendarColor" type="color" value="#4856B7" aria-label="日历颜色">
+      <button class="primary-button compact" type="submit">添加</button>
+    </form>
+    <p id="calendarError" class="form-error" role="alert" hidden></p>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <script src="/static/app.js?v=5" defer></script>
+</body>
+</html>
