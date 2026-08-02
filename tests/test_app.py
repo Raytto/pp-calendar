@@ -135,3 +135,46 @@ def test_search_pagination_is_limited_to_one_hundred(tmp_path):
         }
         assert third.json()["pagination"]["has_next"] is False
         assert client.get("/api/events?q=分页记录&page_size=101").status_code == 422
+
+
+def test_event_browsing_requires_a_bounded_valid_window(tmp_path):
+    with make_client(tmp_path) as client:
+        login(client)
+        calendar_id = client.get("/api/calendars").json()["calendars"][0]["id"]
+
+        assert client.get("/api/events").status_code == 400
+        assert client.get("/api/events?start=2026-08-01").status_code == 400
+        assert client.get("/api/events?start=2026-02-30&end=2026-03-01").status_code == 400
+        assert client.get("/api/events?start=2026-09-01&end=2026-08-01").status_code == 400
+        assert client.get("/api/events?start=2026-01-01&end=2026-05-02").status_code == 400
+        assert client.get("/api/events?start=2026-01-01&end=2026-05-01").status_code == 200
+        assert client.get(f"/api/events?q={'x' * 201}").status_code == 422
+
+        with main.write_lock, main.db() as connection:
+            connection.executemany(
+                "INSERT INTO events(title,event_date,calendar_id,notes,created_at,updated_at) VALUES(?,?,?,?,?,?)",
+                [
+                    (f"密集记录 {index}", "2026-08-03", calendar_id, "", "2026-08-03T00:00:00+00:00", "2026-08-03T00:00:00+00:00")
+                    for index in range(2_001)
+                ],
+            )
+            connection.commit()
+
+        ranged = client.get("/api/events?start=2026-08-01&end=2026-08-31")
+        assert ranged.status_code == 200
+        assert len(ranged.json()["events"]) == 2_001
+
+
+def test_login_failure_limiter_is_bounded_and_expires():
+    main.login_attempts.clear()
+    current = 1_000_000.0
+    for index in range(main.MAX_LOGIN_CLIENTS + 20):
+        main.record_login_failure(f"client-{index}", current)
+    assert len(main.login_attempts) == main.MAX_LOGIN_CLIENTS
+
+    client = "blocked-client"
+    for _ in range(main.LOGIN_ATTEMPT_LIMIT):
+        main.record_login_failure(client, current)
+    assert main.login_is_blocked(client, current)
+    assert not main.login_is_blocked(client, current + main.LOGIN_WINDOW_SECONDS + 1)
+    assert client not in main.login_attempts

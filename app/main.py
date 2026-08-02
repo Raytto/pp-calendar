@@ -8,7 +8,7 @@ import secrets
 import sqlite3
 import threading
 import time
-from collections import defaultdict, deque
+from collections import OrderedDict, deque
 from contextlib import asynccontextmanager, contextmanager
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -26,6 +26,10 @@ USERNAME = os.getenv("PP_CALENDAR_USERNAME", "PP")
 PASSWORD_HASH = os.getenv("PP_CALENDAR_PASSWORD_HASH", "")
 COOKIE_NAME = "pp_calendar_session"
 SESSION_DAYS = 30
+MAX_EVENT_WINDOW_DAYS = 120
+LOGIN_WINDOW_SECONDS = 600
+LOGIN_ATTEMPT_LIMIT = 10
+MAX_LOGIN_CLIENTS = 4096
 COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 CALENDAR_COLORS = (
@@ -35,7 +39,8 @@ CALENDAR_COLORS = (
     "#E67C73", "#F6BF26", "#33B679", "#4285F4", "#9E69AF", "#A79B8E",
 )
 write_lock = threading.RLock()
-login_attempts: dict[str, deque[float]] = defaultdict(deque)
+login_attempts_lock = threading.Lock()
+login_attempts: OrderedDict[str, deque[float]] = OrderedDict()
 
 
 def now_iso() -> str:
@@ -63,6 +68,34 @@ def verify_password(password: str, encoded: str) -> bool:
 
 def token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def login_is_blocked(client: str, current: float) -> bool:
+    with login_attempts_lock:
+        attempts = login_attempts.get(client)
+        if not attempts:
+            return False
+        while attempts and attempts[0] < current - LOGIN_WINDOW_SECONDS:
+            attempts.popleft()
+        if not attempts:
+            login_attempts.pop(client, None)
+            return False
+        login_attempts.move_to_end(client)
+        return len(attempts) >= LOGIN_ATTEMPT_LIMIT
+
+
+def record_login_failure(client: str, current: float) -> None:
+    with login_attempts_lock:
+        attempts = login_attempts.setdefault(client, deque())
+        attempts.append(current)
+        login_attempts.move_to_end(client)
+        while len(login_attempts) > MAX_LOGIN_CLIENTS:
+            login_attempts.popitem(last=False)
+
+
+def clear_login_failures(client: str) -> None:
+    with login_attempts_lock:
+        login_attempts.pop(client, None)
 
 
 def standard_calendar_color(value: str) -> str:
@@ -299,6 +332,15 @@ def event_view(row: sqlite3.Row) -> dict:
     }
 
 
+def query_date(value: str, label: str) -> date:
+    if not DATE_RE.fullmatch(value):
+        raise HTTPException(400, f"{label}日期格式无效")
+    try:
+        return date.fromisoformat(value)
+    except ValueError as error:
+        raise HTTPException(400, f"{label}日期无效") from error
+
+
 EVENT_JOIN = """
 SELECT e.*, c.name AS calendar_name, c.color AS calendar_color
 FROM events e JOIN calendars c ON c.id=e.calendar_id
@@ -340,16 +382,13 @@ def session_info(session_token: Annotated[str | None, Cookie(alias=COOKIE_NAME)]
 @app.post("/api/login")
 def login(payload: LoginInput, request: Request, response: Response) -> dict:
     client = request.headers.get("x-real-ip") or (request.client.host if request.client else "unknown")
-    attempts = login_attempts[client]
     current = time.time()
-    while attempts and attempts[0] < current - 600:
-        attempts.popleft()
-    if len(attempts) >= 10:
+    if login_is_blocked(client, current):
         raise HTTPException(429, "尝试次数过多，请稍后再试")
     if payload.username.casefold() != USERNAME.casefold() or not verify_password(payload.password, PASSWORD_HASH):
-        attempts.append(current)
+        record_login_failure(client, current)
         raise HTTPException(401, "用户名或密码错误")
-    attempts.clear()
+    clear_login_failures(client)
     raw_token = secrets.token_urlsafe(40)
     csrf = secrets.token_urlsafe(32)
     expires = int(time.time() + SESSION_DAYS * 86400)
@@ -452,23 +491,28 @@ def list_events(
     _session: Annotated[sqlite3.Row, Depends(current_session)],
     start: str | None = None,
     end: str | None = None,
-    q: str | None = None,
+    q: Annotated[str | None, Query(max_length=200)] = None,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 100,
 ) -> dict:
     clauses: list[str] = []
     values: list[object] = []
-    if start:
-        if not DATE_RE.fullmatch(start):
-            raise HTTPException(400, "开始日期格式无效")
+    query = (q or "").strip()
+    if bool(start) != bool(end):
+        raise HTTPException(400, "开始日期和结束日期必须同时提供")
+    if start and end:
+        start_date = query_date(start, "开始")
+        end_date = query_date(end, "结束")
+        if start_date > end_date:
+            raise HTTPException(400, "开始日期不能晚于结束日期")
+        if (end_date - start_date).days > MAX_EVENT_WINDOW_DAYS:
+            raise HTTPException(400, f"日期范围不能超过 {MAX_EVENT_WINDOW_DAYS} 天")
         clauses.append("e.event_date>=?")
         values.append(start)
-    if end:
-        if not DATE_RE.fullmatch(end):
-            raise HTTPException(400, "结束日期格式无效")
         clauses.append("e.event_date<=?")
         values.append(end)
-    query = (q or "").strip()
+    elif not query:
+        raise HTTPException(400, "浏览事件时必须提供日期范围")
     if query:
         clauses.append("(e.title LIKE ? ESCAPE '\\' OR e.notes LIKE ? ESCAPE '\\' OR c.name LIKE ? ESCAPE '\\')")
         escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -495,7 +539,7 @@ def list_events(
             }
         else:
             rows = connection.execute(
-                EVENT_JOIN + where + " ORDER BY e.event_date DESC,e.id DESC LIMIT 2000", values
+                EVENT_JOIN + where + " ORDER BY e.event_date DESC,e.id DESC", values
             ).fetchall()
             pagination = None
     return {"events": [event_view(row) for row in rows], "query": query, "pagination": pagination}

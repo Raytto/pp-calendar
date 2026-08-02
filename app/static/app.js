@@ -11,6 +11,7 @@ const SIDEBAR_WIDTH_KEY = "pp-calendar-sidebar-width";
 const SIDEBAR_WIDTH_DEFAULT = 280;
 const SIDEBAR_WIDTH_MIN = 220;
 const SIDEBAR_WIDTH_MAX = 520;
+const MONTH_CACHE_TTL_MS = 60_000;
 
 function monthFromPath(pathname = window.location.pathname) {
   const match = pathname.match(/^\/month\/(\d{4})\/(\d{1,2})\/(\d{1,2})\/?$/);
@@ -35,7 +36,11 @@ const state = {
   searchTimer: null,
   searchPage: 1,
   searchRequestId: 0,
+  searchController: null,
   monthRequestId: 0,
+  monthCache: new Map(),
+  monthInflight: new Map(),
+  renderedMonthKey: null,
   selectedDayDate: null,
   optionsCalendarId: null,
 };
@@ -114,6 +119,19 @@ function monthStartGrid(cursor) {
   return addDays(first, -((first.getDay() + 6) % 7));
 }
 
+function monthCursor(value, offset = 0) {
+  return new Date(value.getFullYear(), value.getMonth() + offset, 1);
+}
+
+function monthKey(value) {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthRange(value) {
+  const first = monthStartGrid(value);
+  return { first, last: addDays(first, 41) };
+}
+
 function fullDateLabel(value) {
   return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "long", day: "numeric", weekday: "long" }).format(parseDate(value));
 }
@@ -170,6 +188,12 @@ function toast(message) {
 
 function showLogin() {
   state.csrf = "";
+  state.searchController?.abort();
+  state.searchController = null;
+  invalidateMonthCache();
+  state.calendars = [];
+  state.events = [];
+  state.renderedMonthKey = null;
   els.appView.hidden = true;
   els.loginView.hidden = false;
   setTimeout(() => $("#loginUsername").focus(), 50);
@@ -184,12 +208,26 @@ async function showApp(session) {
   await loadMonth();
 }
 
+function readStoredArray(key) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || "null");
+    return Array.isArray(value) ? value : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function writeStoredJson(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); }
+  catch (_error) { /* Browser privacy settings may disable storage. */ }
+}
+
 async function loadCalendars() {
   const payload = await api("/api/calendars");
   const prior = new Set(state.visibleCalendars);
   state.calendars = payload.calendars;
-  const saved = JSON.parse(localStorage.getItem("pp-calendar-visible") || "null");
-  const savedKnown = JSON.parse(localStorage.getItem("pp-calendar-known") || "null");
+  const saved = readStoredArray("pp-calendar-visible");
+  const savedKnown = readStoredArray("pp-calendar-known");
   let wanted;
   if (prior.size) wanted = prior;
   else if (!Array.isArray(saved) || !Array.isArray(savedKnown)) wanted = new Set(state.calendars.map((item) => item.id));
@@ -199,28 +237,93 @@ async function loadCalendars() {
     state.calendars.forEach((item) => { if (!known.has(item.id)) wanted.add(item.id); });
   }
   state.visibleCalendars = new Set(state.calendars.filter((item) => wanted.has(item.id)).map((item) => item.id));
-  localStorage.setItem("pp-calendar-visible", JSON.stringify([...state.visibleCalendars]));
-  localStorage.setItem("pp-calendar-known", JSON.stringify(state.calendars.map((item) => item.id)));
+  saveVisibleCalendars();
+  writeStoredJson("pp-calendar-known", state.calendars.map((item) => item.id));
   renderCalendarFilters();
   renderEventCalendarOptions();
 }
 
-async function loadMonth() {
-  const requestId = ++state.monthRequestId;
-  const first = monthStartGrid(state.cursor);
-  const last = addDays(first, 41);
-  const payload = await api(`/api/events?start=${isoDate(first)}&end=${isoDate(last)}`);
-  if (requestId !== state.monthRequestId) return;
-  state.events = payload.events;
+function renderMonthData(events) {
+  state.events = events;
+  state.renderedMonthKey = monthKey(state.cursor);
   renderMonth();
   renderMiniCalendar();
   renderMobileMonthStrip();
 }
 
+function pruneMonthWindow(center) {
+  const allowed = new Set([-1, 0, 1].map((offset) => monthKey(monthCursor(center, offset))));
+  [...state.monthCache.keys()].forEach((key) => { if (!allowed.has(key)) state.monthCache.delete(key); });
+  [...state.monthInflight.entries()].forEach(([key, request]) => {
+    if (!allowed.has(key)) {
+      request.controller.abort();
+      state.monthInflight.delete(key);
+    }
+  });
+}
+
+function invalidateMonthCache() {
+  state.monthInflight.forEach((request) => request.controller.abort());
+  state.monthInflight.clear();
+  state.monthCache.clear();
+  state.monthRequestId += 1;
+}
+
+async function requestMonth(value, force = false) {
+  const key = monthKey(value);
+  const cached = state.monthCache.get(key);
+  if (!force && cached && Date.now() - cached.loadedAt < MONTH_CACHE_TTL_MS) return cached.events;
+  const existing = state.monthInflight.get(key);
+  if (existing && !force) return existing.promise;
+  if (existing) existing.controller.abort();
+
+  const controller = new AbortController();
+  const { first, last } = monthRange(value);
+  const promise = api(`/api/events?start=${isoDate(first)}&end=${isoDate(last)}`, { signal: controller.signal })
+    .then((payload) => {
+      const entry = { events: payload.events, loadedAt: Date.now() };
+      state.monthCache.set(key, entry);
+      return entry.events;
+    });
+  state.monthInflight.set(key, { controller, promise });
+  try {
+    return await promise;
+  } finally {
+    if (state.monthInflight.get(key)?.promise === promise) state.monthInflight.delete(key);
+  }
+}
+
+function prefetchAdjacentMonths(center) {
+  [-1, 1].forEach((offset) => {
+    requestMonth(monthCursor(center, offset)).catch((error) => {
+      if (error.name !== "AbortError") console.warn("相邻月份预取失败", error);
+    });
+  });
+}
+
+async function loadMonth({ force = false } = {}) {
+  const requestId = ++state.monthRequestId;
+  const cursor = monthCursor(state.cursor);
+  const key = monthKey(cursor);
+  pruneMonthWindow(cursor);
+  const cached = state.monthCache.get(key);
+  if (cached) renderMonthData(cached.events);
+  else if (state.renderedMonthKey !== key) renderMonthData([]);
+  try {
+    const events = await requestMonth(cursor, force);
+    if (requestId !== state.monthRequestId || key !== monthKey(state.cursor)) return;
+    renderMonthData(events);
+    pruneMonthWindow(cursor);
+    prefetchAdjacentMonths(cursor);
+  } catch (error) {
+    if (error.name !== "AbortError") throw error;
+  }
+}
+
 function showCalendar(calendarId) {
   if (state.visibleCalendars.has(calendarId)) return;
   state.visibleCalendars.add(calendarId);
-  localStorage.setItem("pp-calendar-visible", JSON.stringify([...state.visibleCalendars]));
+  saveVisibleCalendars();
   renderCalendarFilters();
 }
 
@@ -235,7 +338,7 @@ function showSavedEvent(savedEvent) {
 }
 
 function saveVisibleCalendars() {
-  localStorage.setItem("pp-calendar-visible", JSON.stringify([...state.visibleCalendars]));
+  writeStoredJson("pp-calendar-visible", [...state.visibleCalendars]);
 }
 
 function renderStandardColorPalette(container, selectedColor, onSelect) {
@@ -293,9 +396,11 @@ async function updateCalendarColor(calendarId, color) {
   if (!calendar || calendar.color === color) { closeCalendarOptions(); return; }
   try {
     await api(`/api/calendars/${calendarId}`, { method: "PATCH", body: { color } });
+    invalidateMonthCache();
     closeCalendarOptions();
     await loadCalendars();
-    await loadMonth();
+    await loadMonth({ force: true });
+    refreshSearchIfVisible();
     toast("日历颜色已更新");
   } catch (error) {
     toast(error.message);
@@ -630,11 +735,13 @@ async function saveEvent(event) {
     return;
   }
   showSavedEvent(savedEvent);
+  invalidateMonthCache();
   els.eventDialog.close();
   toast(editing ? "事件已更新" : "事件已创建");
   try {
     await loadCalendars();
-    await loadMonth();
+    await loadMonth({ force: true });
+    refreshSearchIfVisible();
   } catch (_error) {
     toast("事件已保存；后台刷新暂时失败");
   }
@@ -644,9 +751,11 @@ async function deleteEvent() {
   if (!state.editingEvent || !confirm(`确定删除“${state.editingEvent.title}”吗？`)) return;
   try {
     await api(`/api/events/${state.editingEvent.id}`, { method: "DELETE" });
+    invalidateMonthCache();
     els.eventDialog.close();
     await loadCalendars();
-    await loadMonth();
+    await loadMonth({ force: true });
+    refreshSearchIfVisible();
     toast("事件已删除");
   } catch (error) { showError(els.eventError, error.message); }
 }
@@ -667,7 +776,8 @@ function renderCalendarManager() {
     save.addEventListener("click", async () => {
       try {
         await api(`/api/calendars/${calendar.id}`, { method: "PATCH", body: { name: name.value.trim() } });
-        await loadCalendars(); await loadMonth(); renderCalendarManager(); toast("日历已更新");
+        invalidateMonthCache();
+        await loadCalendars(); await loadMonth({ force: true }); renderCalendarManager(); refreshSearchIfVisible(); toast("日历已更新");
       } catch (error) { showError(els.calendarError, error.message); }
     });
     const remove = document.createElement("button");
@@ -679,7 +789,7 @@ function renderCalendarManager() {
       if (!confirm(`确定删除日历“${calendar.name}”吗？`)) return;
       try {
         await api(`/api/calendars/${calendar.id}`, { method: "DELETE" });
-        await loadCalendars(); await loadMonth(); renderCalendarManager(); toast("日历已删除");
+        await loadCalendars(); renderCalendarManager(); toast("日历已删除");
       } catch (error) { showError(els.calendarError, error.message); }
     });
     row.append(color, name, save, remove);
@@ -707,6 +817,9 @@ function openSearch() {
 }
 
 function closeSearch() {
+  state.searchController?.abort();
+  state.searchController = null;
+  state.searchRequestId += 1;
   els.searchView.hidden = true;
   els.calendarView.hidden = false;
   $("#mobileFab").hidden = false;
@@ -753,15 +866,23 @@ function renderSearchPagination(pagination) {
 
 async function search(page = 1) {
   const query = els.searchInput.value.trim();
+  state.searchController?.abort();
+  state.searchController = null;
   const requestId = ++state.searchRequestId;
   state.searchPage = page;
   els.searchResults.replaceChildren();
   renderSearchPagination(null);
   if (!query) { els.searchSummary.textContent = "输入关键词，搜索事件标题、备注和所属日历。"; return; }
+  const controller = new AbortController();
+  state.searchController = controller;
   try {
-    const payload = await api(`/api/events?q=${encodeURIComponent(query)}&page=${page}&page_size=100`);
+    const payload = await api(`/api/events?q=${encodeURIComponent(query)}&page=${page}&page_size=100`, { signal: controller.signal });
     if (requestId !== state.searchRequestId) return;
     const pagination = payload.pagination;
+    if (pagination.total_pages > 0 && pagination.page > pagination.total_pages) {
+      await search(pagination.total_pages);
+      return;
+    }
     const pageLabel = pagination.total_pages > 1 ? ` · 第 ${pagination.page}/${pagination.total_pages} 页` : "";
     els.searchSummary.textContent = `找到 ${pagination.total} 条与“${query}”相关的记录${pageLabel}`;
     if (!payload.events.length) {
@@ -784,7 +905,15 @@ async function search(page = 1) {
       els.searchResults.append(button);
     });
     renderSearchPagination(pagination);
-  } catch (error) { els.searchSummary.textContent = error.message; }
+  } catch (error) {
+    if (error.name !== "AbortError") els.searchSummary.textContent = error.message;
+  } finally {
+    if (state.searchController === controller) state.searchController = null;
+  }
+}
+
+function refreshSearchIfVisible() {
+  if (!els.searchView.hidden && els.searchInput.value.trim()) search(state.searchPage);
 }
 
 function closeSidebar() {
@@ -990,6 +1119,14 @@ window.addEventListener("resize", scheduleMonthRender);
 window.visualViewport?.addEventListener("resize", scheduleMonthRender);
 if (window.ResizeObserver) new ResizeObserver(scheduleMonthRender).observe(els.monthGrid);
 els.sidebarScrollRegion.addEventListener("scroll", closeCalendarOptions, { passive: true });
+let focusRefreshTimer;
+function refreshMonthAfterReturning() {
+  if (document.hidden || els.appView.hidden) return;
+  clearTimeout(focusRefreshTimer);
+  focusRefreshTimer = setTimeout(() => loadMonth().catch((error) => toast(error.message)), 120);
+}
+window.addEventListener("focus", refreshMonthAfterReturning);
+document.addEventListener("visibilitychange", refreshMonthAfterReturning);
 window.addEventListener("popstate", () => {
   const value = monthFromPath();
   if (!value || els.appView.hidden) return;
