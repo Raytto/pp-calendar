@@ -35,6 +35,8 @@ const els = {
   searchSummary: $("#searchSummary"), searchResults: $("#searchResults"), eventDialog: $("#eventDialog"),
   eventForm: $("#eventForm"), eventDialogTitle: $("#eventDialogTitle"), eventTitle: $("#eventTitle"),
   eventDate: $("#eventDate"), eventCalendar: $("#eventCalendar"), eventNotes: $("#eventNotes"),
+  eventCalendarButton: $("#eventCalendarButton"), eventCalendarName: $("#eventCalendarName"),
+  eventCalendarColor: $("#eventCalendarColor"), eventCalendarMenu: $("#eventCalendarMenu"),
   eventError: $("#eventError"), deleteEventButton: $("#deleteEventButton"), detailDialog: $("#detailDialog"),
   detailColor: $("#detailColor"), detailTitle: $("#detailTitle"), detailDate: $("#detailDate"),
   detailCalendar: $("#detailCalendar"), detailNotes: $("#detailNotes"), calendarDialog: $("#calendarDialog"),
@@ -196,13 +198,60 @@ function renderCalendarFilters() {
 }
 
 function renderEventCalendarOptions(selected) {
+  const selectedId = Number(selected || els.eventCalendar.value || state.calendars[0]?.id);
   els.eventCalendar.replaceChildren();
+  els.eventCalendarMenu.replaceChildren();
   state.calendars.forEach((calendar) => {
     const option = document.createElement("option");
     option.value = calendar.id;
     option.textContent = calendar.name;
-    option.selected = Number(selected) === calendar.id;
+    option.selected = selectedId === calendar.id;
     els.eventCalendar.append(option);
+
+    const menuOption = document.createElement("button");
+    menuOption.type = "button";
+    menuOption.className = "calendar-select-option";
+    menuOption.dataset.calendarId = calendar.id;
+    menuOption.setAttribute("role", "option");
+    menuOption.style.setProperty("--calendar-color", calendar.color);
+    const color = document.createElement("span");
+    color.className = "calendar-option-color";
+    color.setAttribute("aria-hidden", "true");
+    const name = document.createElement("span");
+    name.className = "calendar-option-name";
+    name.textContent = calendar.name;
+    const check = document.createElement("span");
+    check.className = "calendar-option-check";
+    check.setAttribute("aria-hidden", "true");
+    menuOption.append(color, name, check);
+    menuOption.addEventListener("click", () => {
+      selectEventCalendar(calendar.id);
+      toggleEventCalendarMenu(false);
+      els.eventCalendarButton.focus();
+    });
+    els.eventCalendarMenu.append(menuOption);
+  });
+  selectEventCalendar(selectedId);
+}
+
+function selectEventCalendar(calendarId) {
+  const calendar = state.calendars.find((item) => item.id === Number(calendarId)) || state.calendars[0];
+  if (!calendar) return;
+  els.eventCalendar.value = String(calendar.id);
+  els.eventCalendarName.textContent = calendar.name;
+  els.eventCalendarColor.style.setProperty("--calendar-color", calendar.color);
+  els.eventCalendarMenu.querySelectorAll(".calendar-select-option").forEach((option) => {
+    option.setAttribute("aria-selected", String(Number(option.dataset.calendarId) === calendar.id));
+  });
+}
+
+function toggleEventCalendarMenu(force) {
+  const shouldOpen = typeof force === "boolean" ? force : els.eventCalendarMenu.hidden;
+  els.eventCalendarMenu.hidden = !shouldOpen;
+  els.eventCalendarButton.setAttribute("aria-expanded", String(shouldOpen));
+  if (shouldOpen) requestAnimationFrame(() => {
+    const selected = els.eventCalendarMenu.querySelector('[aria-selected="true"]');
+    selected?.scrollIntoView({ block: "nearest" });
   });
 }
 
@@ -350,6 +399,7 @@ function openEventEditor(event = null, targetDate = null) {
   els.eventDate.value = event?.event_date || targetDate || isoDate(new Date());
   els.eventNotes.value = event?.notes || "";
   renderEventCalendarOptions(event?.calendar_id || state.calendars[0]?.id);
+  toggleEventCalendarMenu(false);
   els.deleteEventButton.hidden = !event;
   showError(els.eventError);
   els.eventDialog.showModal();
@@ -576,6 +626,33 @@ els.dayAddEventButton.addEventListener("click", () => {
 els.dayEventsDialog.addEventListener("click", (event) => {
   if (event.target === els.dayEventsDialog) els.dayEventsDialog.close();
 });
+els.eventCalendarButton.addEventListener("click", () => toggleEventCalendarMenu());
+els.eventCalendarButton.addEventListener("keydown", (event) => {
+  if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+  event.preventDefault();
+  toggleEventCalendarMenu(true);
+  const options = [...els.eventCalendarMenu.querySelectorAll(".calendar-select-option")];
+  const selectedIndex = Math.max(0, options.findIndex((option) => option.getAttribute("aria-selected") === "true"));
+  options[event.key === 'ArrowUp' ? Math.max(0, selectedIndex - 1) : selectedIndex]?.focus();
+});
+els.eventCalendarMenu.addEventListener("keydown", (event) => {
+  const options = [...els.eventCalendarMenu.querySelectorAll(".calendar-select-option")];
+  const current = options.indexOf(document.activeElement);
+  let target = null;
+  if (event.key === 'ArrowDown') target = options[Math.min(options.length - 1, current + 1)];
+  if (event.key === 'ArrowUp') target = options[Math.max(0, current - 1)];
+  if (event.key === 'Home') target = options[0];
+  if (event.key === 'End') target = options.at(-1);
+  if (event.key === 'Escape') return;
+  if (target) { event.preventDefault(); target.focus(); }
+});
+els.eventDialog.addEventListener("close", () => toggleEventCalendarMenu(false));
+els.eventDialog.addEventListener("cancel", (event) => {
+  if (els.eventCalendarMenu.hidden) return;
+  event.preventDefault();
+  toggleEventCalendarMenu(false);
+  els.eventCalendarButton.focus();
+});
 $("#manageCalendarsButton").addEventListener("click", () => { showError(els.calendarError); renderCalendarManager(); els.calendarDialog.showModal(); });
 els.calendarForm.addEventListener("submit", createCalendar);
 $("#searchButton").addEventListener("click", openSearch);
@@ -598,6 +675,7 @@ $("#mobileFab").addEventListener("click", () => openEventEditor());
 els.sidebarBackdrop.addEventListener("click", closeSidebar);
 document.addEventListener("click", (event) => {
   if (!els.accountMenu.hidden && !event.target.closest(".sidebar-account") && event.target !== els.mobileAccountButton) toggleAccountMenu(false);
+  if (!els.eventCalendarMenu.hidden && !event.target.closest(".calendar-select-field")) toggleEventCalendarMenu(false);
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !els.searchView.hidden && !document.querySelector("dialog[open]")) closeSearch();

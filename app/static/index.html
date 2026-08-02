@@ -8,7 +8,7 @@
   <title>PP Calendar</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <script src="/static/theme.js?v=1"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=6">
+  <link rel="stylesheet" href="/static/styles.css?v=7">
 </head>
 <body>
   <div id="loginView" class="login-page" hidden>
@@ -119,9 +119,18 @@
       <label class="title-field"><span>标题</span><input id="eventTitle" maxlength="200" placeholder="添加标题" required></label>
       <div class="field-grid">
         <label><span>日期</span><input id="eventDate" type="date" required></label>
-        <label><span>所属日历</span><select id="eventCalendar" required></select></label>
+        <div class="form-field calendar-select-field">
+          <span class="field-label">所属日历</span>
+          <select id="eventCalendar" class="calendar-native-select" required tabindex="-1" aria-hidden="true"></select>
+          <button id="eventCalendarButton" class="calendar-select-button" type="button" aria-haspopup="listbox" aria-expanded="false">
+            <span id="eventCalendarName" class="calendar-select-name"></span>
+            <span id="eventCalendarColor" class="calendar-select-color" aria-hidden="true"></span>
+            <span class="calendar-select-caret" aria-hidden="true">⌄</span>
+          </button>
+          <div id="eventCalendarMenu" class="calendar-select-menu" role="listbox" aria-label="选择所属日历" hidden></div>
+        </div>
       </div>
-      <label><span>备注</span><textarea id="eventNotes" maxlength="10000" rows="7" placeholder="记录这一天的细节…"></textarea></label>
+      <label><span>备注</span><textarea id="eventNotes" maxlength="10000" rows="7" placeholder="记录这个事件的细节…"></textarea></label>
       <p id="eventError" class="form-error" role="alert" hidden></p>
       <div class="modal-actions">
         <button id="deleteEventButton" class="danger-button" type="button" hidden>删除</button>
@@ -188,6 +197,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <script src="/static/app.js?v=11" defer></script>
+  <script src="/static/app.js?v=12" defer></script>
 </body>
 </html>
