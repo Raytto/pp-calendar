@@ -90,7 +90,7 @@ function visibleEventCapacity(eventCount) {
   const rowHeight = els.monthGrid.clientHeight ? els.monthGrid.clientHeight / 6 : (mobile ? 112 : 132);
   const cellPaddingAndHeader = mobile ? 29 : 35;
   const chipStep = mobile ? 22 : 24;
-  const moreHeight = mobile ? 16 : 15;
+  const moreHeight = mobile ? 19 : 20;
   const withoutOverflow = Math.max(1, Math.floor((rowHeight - cellPaddingAndHeader) / chipStep));
   if (eventCount <= withoutOverflow) return Math.min(eventCount, mobile ? 3 : 4);
   return Math.max(1, Math.min(mobile ? 3 : 4, Math.floor((rowHeight - cellPaddingAndHeader - moreHeight) / chipStep)));
@@ -324,6 +324,8 @@ function renderMonth() {
       more.className = "more-events";
       more.textContent = window.innerWidth <= 560 ? `+${events.length - maxVisible} 项` : `另有 ${events.length - maxVisible} 项`;
       more.title = `另有 ${events.length - maxVisible} 项`;
+      more.setAttribute("aria-haspopup", "dialog");
+      more.setAttribute("aria-controls", "dayEventsDialog");
       more.setAttribute("aria-label", `${fullDateLabel(key)}，另有 ${events.length - maxVisible} 项，查看当天全部事件`);
       more.addEventListener("click", (clickEvent) => {
         clickEvent.stopPropagation();

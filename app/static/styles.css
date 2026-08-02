@@ -144,8 +144,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .day-events { display: grid; gap: 3px; }
 .event-chip { min-width: 0; height: 21px; display: flex; align-items: center; padding: 0 6px; overflow: hidden; border: 0; border-radius: 6px; color: var(--event-text,#fff); background: var(--event-color); cursor: pointer; font-size: 11px; font-weight: 650; text-align: left; white-space: nowrap; text-overflow: ellipsis; }
 .event-chip:hover { filter: brightness(.94); transform: translateY(-1px); }
-.more-events { width: 100%; min-width: 0; height: 15px; padding: 0 5px; overflow: hidden; border: 0; border-radius: 4px; color: #515565; background: transparent; cursor: pointer; font-size: 10px; font-weight: 750; line-height: 15px; text-align: left; white-space: nowrap; text-overflow: ellipsis; }
-.more-events:hover { color: var(--indigo); background: var(--indigo-pale); }
+.more-events { position: relative; z-index: 1; width: 100%; min-width: 0; height: 20px; display: flex; align-items: center; padding: 0 6px; overflow: hidden; border: 0; border-radius: 5px; color: #454958; background: color-mix(in srgb, var(--ink) 5%, transparent); cursor: pointer; font-size: 10px; font-weight: 800; line-height: 20px; text-align: left; white-space: nowrap; text-overflow: ellipsis; transition: color .12s ease, background .12s ease, transform .12s ease; }
+.more-events:hover, .more-events:focus-visible { color: var(--indigo); background: var(--indigo-pale); outline: 0; }
+.more-events:active { transform: translateY(1px); }
 
 .search-view { height: 100%; overflow-y: auto; background: var(--surface-soft); }
 .search-header { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 13px; padding: 17px 30px; border-bottom: 1px solid var(--line); background: rgba(250,251,255,.96); backdrop-filter: blur(10px); }
@@ -218,7 +219,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .day-events-panel { display: flex; flex-direction: column; min-height: 0; max-height: min(518px, calc(100vh - 26px)); padding: 20px; }
 .day-events-heading { flex: 0 0 auto; align-items: center; }
 .day-events-heading h2 { margin-top: 2px; font-size: 22px; }
-.day-events-list { min-height: 0; display: grid; gap: 3px; margin: 15px -6px 12px; padding: 0 6px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.day-events-list { min-height: 0; flex: 1 1 auto; display: grid; align-content: start; gap: 3px; margin: 15px -6px 12px; padding: 0 6px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; scrollbar-width: thin; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
 .day-agenda-item { width: 100%; min-width: 0; display: grid; grid-template-columns: 8px minmax(0,1fr) auto; align-items: center; gap: 10px; padding: 9px 8px; border: 0; border-radius: 10px; color: var(--ink); background: transparent; cursor: pointer; text-align: left; }
 .day-agenda-item:hover { background: var(--surface-hover); }
 .day-agenda-color { width: 8px; height: 28px; border-radius: 4px; background: var(--event-color); }
@@ -317,7 +318,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .day-number-row { min-height: 23px; }
   .day-number { min-width: 24px; height: 24px; font-size: 11px; }
   .event-chip { height: 20px; padding: 0 3px; border-radius: 4px; font-size: 9px; }
-  .more-events { padding-left: 3px; font-size: 9px; }
+  .more-events { height: 19px; padding-left: 3px; font-size: 9px; line-height: 19px; }
   .search-header { padding: 12px; }
   .search-summary, .search-results { padding-left: 12px; padding-right: 12px; }
   .search-result { grid-template-columns: 58px 10px minmax(0,1fr); gap: 9px; padding: 13px 8px; }
