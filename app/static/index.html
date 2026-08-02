@@ -8,7 +8,7 @@
   <title>PP Calendar</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <script src="/static/theme.js?v=1"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=10">
+  <link rel="stylesheet" href="/static/styles.css?v=11">
 </head>
 <body>
   <div id="loginView" class="login-page" hidden>
@@ -30,64 +30,75 @@
   </div>
 
   <div id="appView" class="app-shell" hidden>
-    <header class="topbar">
-      <div class="topbar-left">
-        <button id="menuButton" class="icon-button mobile-only" aria-label="打开菜单">☰</button>
-        <div class="wordmark"><div class="brand-mark">PP</div><strong>Calendar</strong></div>
-        <button id="todayButton" class="outline-button">今天</button>
-        <div class="month-navigation">
-          <button id="prevButton" class="icon-button" aria-label="上个月">‹</button>
-          <button id="nextButton" class="icon-button" aria-label="下个月">›</button>
+    <button id="sidebarBackdrop" class="sidebar-backdrop" aria-label="关闭菜单" hidden></button>
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-top">
+        <div class="wordmark">
+          <div class="brand-mark">PP</div>
+          <span class="brand-copy"><strong>PP Calendar</strong><small>PRIVATE DAY RECORDS</small></span>
         </div>
-        <div class="month-heading">
-          <button id="monthJumpButton" class="month-title-button" type="button" aria-label="选择年月">
-            <span id="monthTitle"></span><span class="month-title-caret" aria-hidden="true">⌄</span>
-          </button>
+        <button id="sidebarCloseButton" class="icon-button mobile-only" type="button" aria-label="关闭侧边栏">×</button>
+      </div>
+      <button id="sidebarSearch" class="sidebar-search" type="button" aria-label="搜索事件" aria-keyshortcuts="/">
+        <span class="sidebar-search-icon" aria-hidden="true"></span><span>搜索事件</span><kbd>/</kbd>
+      </button>
+      <div id="sidebarScrollRegion" class="sidebar-scroll-region">
+        <div class="sidebar-scroll-content">
+          <section class="mini-calendar-section">
+            <div class="section-heading"><strong id="miniTitle"></strong></div>
+            <div class="mini-week"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+            <div id="miniCalendar" class="mini-grid"></div>
+          </section>
+          <section class="calendar-list-section">
+            <div class="section-heading"><strong>我的日历</strong><button id="manageCalendarsButton" class="icon-button" aria-label="管理日历">＋</button></div>
+            <div id="calendarFilters" class="calendar-filters"></div>
+          </section>
+          <p class="sidebar-note">记录发生，也安排期待。</p>
         </div>
       </div>
-      <div class="topbar-actions">
-        <button id="searchButton" class="icon-button" aria-label="搜索">⌕</button>
-        <button id="mobileAccountButton" class="avatar-button mobile-account-button" aria-label="打开账号与外观设置">PP</button>
-      </div>
-    </header>
-
-    <nav id="mobileMonthStrip" class="mobile-month-strip" aria-label="选择月份"></nav>
-
-    <div class="content-shell">
-      <aside id="sidebar" class="sidebar">
-        <button id="sidebarCreate" class="create-button">＋<span>创建事件</span></button>
-        <section class="mini-calendar-section">
-          <div class="section-heading"><strong id="miniTitle"></strong></div>
-          <div class="mini-week"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
-          <div id="miniCalendar" class="mini-grid"></div>
-        </section>
-        <section class="calendar-list-section">
-          <div class="section-heading"><strong>我的日历</strong><button id="manageCalendarsButton" class="icon-button" aria-label="管理日历">＋</button></div>
-          <div id="calendarFilters" class="calendar-filters"></div>
-        </section>
-        <div class="sidebar-spacer"></div>
-        <p class="sidebar-note">记录发生，也安排期待。</p>
-        <div class="sidebar-account">
-          <div id="accountMenu" class="account-settings" hidden>
-            <div class="appearance-setting">
-              <span>外观</span>
-              <div class="theme-options" role="group" aria-label="外观模式">
-                <button type="button" data-theme-mode="system"><b>◐</b><span>跟随系统</span></button>
-                <button type="button" data-theme-mode="light"><b>☀</b><span>浅色</span></button>
-                <button type="button" data-theme-mode="dark"><b>☾</b><span>深色</span></button>
-              </div>
-              <small id="themeStatus">当前跟随系统</small>
+      <div class="sidebar-account">
+        <div id="accountMenu" class="account-settings" hidden>
+          <div class="appearance-setting">
+            <span>外观</span>
+            <div class="theme-options" role="group" aria-label="外观模式">
+              <button type="button" data-theme-mode="system"><b>◐</b><span>跟随系统</span></button>
+              <button type="button" data-theme-mode="light"><b>☀</b><span>浅色</span></button>
+              <button type="button" data-theme-mode="dark"><b>☾</b><span>深色</span></button>
             </div>
-            <button id="logoutButton" class="account-logout" type="button">退出登录</button>
+            <small id="themeStatus">当前跟随系统</small>
           </div>
-          <button id="accountButton" class="account-profile" type="button" aria-label="账号与外观设置" aria-expanded="false">
-            <span class="sidebar-avatar">PP</span>
-            <span class="account-copy"><strong>PP</strong><small>私人日历</small></span>
-            <span class="account-chevron" aria-hidden="true">⌃</span>
-          </button>
+          <button id="logoutButton" class="account-logout" type="button">退出登录</button>
         </div>
-      </aside>
-      <button id="sidebarBackdrop" class="sidebar-backdrop" aria-label="关闭菜单" hidden></button>
+        <button id="accountButton" class="account-profile" type="button" aria-label="账号与外观设置" aria-expanded="false">
+          <span class="sidebar-avatar">PP</span>
+          <span class="account-copy"><strong>PP</strong><small>私人日历</small></span>
+          <span class="account-chevron" aria-hidden="true">⌃</span>
+        </button>
+      </div>
+      <div id="sidebarResizer" class="sidebar-resizer" role="separator" aria-label="调整侧边栏宽度" aria-orientation="vertical" aria-valuemin="220" aria-valuemax="520" tabindex="0" title="拖动调整侧边栏宽度，双击恢复默认"></div>
+    </aside>
+
+    <div class="app-main">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button id="menuButton" class="icon-button mobile-only" aria-label="打开侧边栏" aria-expanded="false">☰</button>
+          <div class="month-heading">
+            <button id="monthJumpButton" class="month-title-button" type="button" aria-label="选择年月">
+              <span id="monthTitle"></span><span class="month-title-caret" aria-hidden="true">⌄</span>
+            </button>
+          </div>
+          <div class="month-navigation">
+            <button id="prevButton" class="icon-button" aria-label="上个月">‹</button>
+            <button id="nextButton" class="icon-button" aria-label="下个月">›</button>
+          </div>
+          <button id="todayButton" class="outline-button">今天</button>
+        </div>
+        <div class="topbar-actions">
+          <button id="mobileAccountButton" class="avatar-button mobile-account-button" aria-label="打开账号与外观设置">PP</button>
+        </div>
+      </header>
+
+      <nav id="mobileMonthStrip" class="mobile-month-strip" aria-label="选择月份"></nav>
 
       <main class="workspace">
         <section id="calendarView" class="calendar-view">
@@ -211,6 +222,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <script src="/static/app.js?v=18" defer></script>
+  <script src="/static/app.js?v=19" defer></script>
 </body>
 </html>

@@ -7,6 +7,10 @@ const STANDARD_CALENDAR_COLORS = [
   "#D50000", "#F09300", "#7CB342", "#039BE5", "#B39DDB", "#616161",
   "#E67C73", "#F6BF26", "#33B679", "#4285F4", "#9E69AF", "#A79B8E",
 ];
+const SIDEBAR_WIDTH_KEY = "pp-calendar-sidebar-width";
+const SIDEBAR_WIDTH_DEFAULT = 280;
+const SIDEBAR_WIDTH_MIN = 220;
+const SIDEBAR_WIDTH_MAX = 520;
 
 function monthFromPath(pathname = window.location.pathname) {
   const match = pathname.match(/^\/month\/(\d{4})\/(\d{1,2})\/(\d{1,2})\/?$/);
@@ -58,8 +62,34 @@ const els = {
   dayEventsList: $("#dayEventsList"), dayAddEventButton: $("#dayAddEventButton"),
   calendarOptionsMenu: $("#calendarOptionsMenu"), calendarOptionsTitle: $("#calendarOptionsTitle"),
   calendarVisibilityAction: $("#calendarVisibilityAction"), calendarOptionsPalette: $("#calendarOptionsPalette"),
-  calendarCreatePalette: $("#calendarCreatePalette"),
+  calendarCreatePalette: $("#calendarCreatePalette"), sidebarScrollRegion: $("#sidebarScrollRegion"),
+  sidebarResizer: $("#sidebarResizer"),
 };
+
+function normalizeSidebarWidth(value) {
+  const width = Number(value);
+  if (!Number.isFinite(width)) return SIDEBAR_WIDTH_DEFAULT;
+  return Math.max(SIDEBAR_WIDTH_MIN, Math.min(SIDEBAR_WIDTH_MAX, Math.round(width)));
+}
+
+function storedSidebarWidth() {
+  try {
+    const stored = localStorage.getItem(SIDEBAR_WIDTH_KEY);
+    return stored === null ? SIDEBAR_WIDTH_DEFAULT : normalizeSidebarWidth(stored);
+  }
+  catch (_error) { return SIDEBAR_WIDTH_DEFAULT; }
+}
+
+function setSidebarWidth(value, persist = true) {
+  const width = normalizeSidebarWidth(value);
+  els.appView.style.setProperty("--sidebar-width", `${width}px`);
+  els.sidebarResizer.setAttribute("aria-valuenow", String(width));
+  if (persist) {
+    try { localStorage.setItem(SIDEBAR_WIDTH_KEY, String(width)); }
+    catch (_error) { /* Browser privacy settings may disable storage. */ }
+  }
+  return width;
+}
 
 function isoDate(value) {
   const year = value.getFullYear();
@@ -672,6 +702,7 @@ function openSearch() {
   els.calendarView.hidden = true;
   els.searchView.hidden = false;
   $("#mobileFab").hidden = true;
+  if (window.matchMedia("(max-width: 900px)").matches) closeSidebar();
   els.searchInput.focus();
 }
 
@@ -760,6 +791,7 @@ function closeSidebar() {
   closeCalendarOptions();
   els.sidebar.classList.remove("open");
   els.sidebarBackdrop.hidden = true;
+  $("#menuButton").setAttribute("aria-expanded", "false");
   toggleAccountMenu(false);
 }
 
@@ -777,6 +809,41 @@ function updateThemeControls(eventDetail) {
   });
   const labels = { system: "跟随系统", light: "浅色模式", dark: "深色模式" };
   els.themeStatus.textContent = mode === "system" ? `跟随系统 · 当前${resolved === "dark" ? "深色" : "浅色"}` : labels[mode];
+}
+
+let sidebarResize = null;
+function beginSidebarResize(event) {
+  if (window.matchMedia("(max-width: 900px)").matches) return;
+  event.preventDefault();
+  event.currentTarget.setPointerCapture(event.pointerId);
+  sidebarResize = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startWidth: Number(els.sidebarResizer.getAttribute("aria-valuenow")) || SIDEBAR_WIDTH_DEFAULT,
+  };
+  document.documentElement.classList.add("sidebar-resizing");
+}
+
+function moveSidebarResize(event) {
+  if (!sidebarResize || sidebarResize.pointerId !== event.pointerId) return;
+  setSidebarWidth(sidebarResize.startWidth + event.clientX - sidebarResize.startX);
+}
+
+function endSidebarResize(event) {
+  if (!sidebarResize || sidebarResize.pointerId !== event.pointerId) return;
+  if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  sidebarResize = null;
+  document.documentElement.classList.remove("sidebar-resizing");
+  scheduleMonthRender();
+}
+
+function resizeSidebarWithKeyboard(event) {
+  const delta = event.key === "ArrowLeft" ? -16 : event.key === "ArrowRight" ? 16 : 0;
+  if (!delta && event.key !== "Home") return;
+  event.preventDefault();
+  const current = Number(els.sidebarResizer.getAttribute("aria-valuenow")) || SIDEBAR_WIDTH_DEFAULT;
+  setSidebarWidth(event.key === "Home" ? SIDEBAR_WIDTH_DEFAULT : current + delta);
+  scheduleMonthRender();
 }
 
 document.querySelectorAll(".close-dialog").forEach((button) => button.addEventListener("click", () => button.closest("dialog").close()));
@@ -798,7 +865,6 @@ els.monthJumpForm.addEventListener("submit", (event) => {
   els.monthJumpDialog.close();
   navigateToMonth(new Date(Number(match[1]), Number(match[2]) - 1, 1)).catch((error) => toast(error.message));
 });
-$("#sidebarCreate").addEventListener("click", () => { closeSidebar(); openEventEditor(); });
 els.eventForm.addEventListener("submit", saveEvent);
 els.deleteEventButton.addEventListener("click", deleteEvent);
 $("#editEventButton").addEventListener("click", () => { const event = state.selectedEvent; els.detailDialog.close(); openEventEditor(event); });
@@ -864,7 +930,7 @@ els.eventDialog.addEventListener("cancel", (event) => {
 });
 $("#manageCalendarsButton").addEventListener("click", () => { showError(els.calendarError); renderCalendarManager(); els.calendarDialog.showModal(); });
 els.calendarForm.addEventListener("submit", createCalendar);
-$("#searchButton").addEventListener("click", openSearch);
+$("#sidebarSearch").addEventListener("click", openSearch);
 $("#closeSearch").addEventListener("click", closeSearch);
 els.searchInput.addEventListener("input", () => { clearTimeout(state.searchTimer); state.searchPage = 1; state.searchTimer = setTimeout(() => search(1), 220); });
 els.accountButton.addEventListener("click", () => toggleAccountMenu());
@@ -879,9 +945,20 @@ document.querySelectorAll("button[data-theme-mode]").forEach((button) => button.
 window.addEventListener("ppcalendar-themechange", (event) => updateThemeControls(event.detail));
 updateThemeControls();
 $("#logoutButton").addEventListener("click", async () => { await api("/api/logout", { method: "POST" }); toggleAccountMenu(false); closeSidebar(); showLogin(); });
-$("#menuButton").addEventListener("click", () => { els.sidebar.classList.add("open"); els.sidebarBackdrop.hidden = false; });
+$("#menuButton").addEventListener("click", () => {
+  els.sidebar.classList.add("open");
+  els.sidebarBackdrop.hidden = false;
+  $("#menuButton").setAttribute("aria-expanded", "true");
+});
+$("#sidebarCloseButton").addEventListener("click", closeSidebar);
 $("#mobileFab").addEventListener("click", () => openEventEditor());
 els.sidebarBackdrop.addEventListener("click", closeSidebar);
+els.sidebarResizer.addEventListener("pointerdown", beginSidebarResize);
+els.sidebarResizer.addEventListener("pointermove", moveSidebarResize);
+els.sidebarResizer.addEventListener("pointerup", endSidebarResize);
+els.sidebarResizer.addEventListener("pointercancel", endSidebarResize);
+els.sidebarResizer.addEventListener("dblclick", () => { setSidebarWidth(SIDEBAR_WIDTH_DEFAULT); scheduleMonthRender(); });
+els.sidebarResizer.addEventListener("keydown", resizeSidebarWithKeyboard);
 document.addEventListener("click", (event) => {
   if (!els.accountMenu.hidden && !event.target.closest(".sidebar-account") && event.target !== els.mobileAccountButton) toggleAccountMenu(false);
   if (!els.eventCalendarMenu.hidden && !event.target.closest(".calendar-select-field")) toggleEventCalendarMenu(false);
@@ -912,7 +989,7 @@ function scheduleMonthRender() {
 window.addEventListener("resize", scheduleMonthRender);
 window.visualViewport?.addEventListener("resize", scheduleMonthRender);
 if (window.ResizeObserver) new ResizeObserver(scheduleMonthRender).observe(els.monthGrid);
-els.calendarFilters.addEventListener("scroll", closeCalendarOptions, { passive: true });
+els.sidebarScrollRegion.addEventListener("scroll", closeCalendarOptions, { passive: true });
 window.addEventListener("popstate", () => {
   const value = monthFromPath();
   if (!value || els.appView.hidden) return;
@@ -920,6 +997,7 @@ window.addEventListener("popstate", () => {
   loadMonth().catch((error) => toast(error.message));
 });
 
+setSidebarWidth(storedSidebarWidth(), false);
 setCalendarCreateColor("#3F51B5");
 
 (async function bootstrap() {
