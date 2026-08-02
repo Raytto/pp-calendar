@@ -564,7 +564,6 @@ els.monthJumpForm.addEventListener("submit", (event) => {
   els.monthJumpDialog.close();
   navigateToMonth(new Date(Number(match[1]), Number(match[2]) - 1, 1)).catch((error) => toast(error.message));
 });
-$("#newEventButton").addEventListener("click", () => openEventEditor());
 $("#sidebarCreate").addEventListener("click", () => { closeSidebar(); openEventEditor(); });
 els.eventForm.addEventListener("submit", saveEvent);
 els.deleteEventButton.addEventListener("click", deleteEvent);
