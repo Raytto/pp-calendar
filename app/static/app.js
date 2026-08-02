@@ -91,11 +91,14 @@ function visibleEventCapacity(eventCount) {
   const mobile = window.innerWidth <= 560;
   const rowHeight = els.monthGrid.clientHeight ? els.monthGrid.clientHeight / 6 : (mobile ? 112 : 132);
   const cellPaddingAndHeader = mobile ? 29 : 35;
-  const chipStep = mobile ? 22 : 24;
+  const chipHeight = mobile ? 20 : 21;
+  const gap = 3;
+  const chipStep = chipHeight + gap;
   const moreHeight = mobile ? 19 : 20;
-  const withoutOverflow = Math.max(1, Math.floor((rowHeight - cellPaddingAndHeader) / chipStep));
-  if (eventCount <= withoutOverflow) return Math.min(eventCount, mobile ? 3 : 4);
-  return Math.max(1, Math.min(mobile ? 3 : 4, Math.floor((rowHeight - cellPaddingAndHeader - moreHeight) / chipStep)));
+  const availableHeight = Math.max(0, rowHeight - cellPaddingAndHeader);
+  const withoutOverflow = Math.max(1, Math.floor((availableHeight + gap) / chipStep));
+  if (eventCount <= withoutOverflow) return eventCount;
+  return Math.max(1, Math.floor((availableHeight - moreHeight) / chipStep));
 }
 
 async function api(path, options = {}) {
@@ -773,7 +776,14 @@ els.monthGrid.addEventListener("touchend", (event) => {
   touchStartX = null;
   if (Math.abs(difference) > 70) moveMonth(difference < 0 ? 1 : -1);
 }, { passive: true });
-window.addEventListener("resize", () => { if (!els.appView.hidden) renderMonth(); });
+let resizeRenderFrame;
+function scheduleMonthRender() {
+  cancelAnimationFrame(resizeRenderFrame);
+  resizeRenderFrame = requestAnimationFrame(() => { if (!els.appView.hidden) renderMonth(); });
+}
+window.addEventListener("resize", scheduleMonthRender);
+window.visualViewport?.addEventListener("resize", scheduleMonthRender);
+if (window.ResizeObserver) new ResizeObserver(scheduleMonthRender).observe(els.monthGrid);
 window.addEventListener("popstate", () => {
   const value = monthFromPath();
   if (!value || els.appView.hidden) return;
