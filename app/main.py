@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Annotated, Iterator
 
-from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -420,6 +420,8 @@ def list_events(
     start: str | None = None,
     end: str | None = None,
     q: str | None = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 100,
 ) -> dict:
     clauses: list[str] = []
     values: list[object] = []
@@ -439,12 +441,31 @@ def list_events(
         escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         values.extend([f"%{escaped}%"] * 3)
     where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
-    limit = 500 if query else 2000
     with db() as connection:
-        rows = connection.execute(
-            EVENT_JOIN + where + " ORDER BY e.event_date DESC,e.id DESC LIMIT ?", (*values, limit)
-        ).fetchall()
-    return {"events": [event_view(row) for row in rows], "query": query}
+        if query:
+            total = connection.execute(
+                "SELECT COUNT(*) AS total FROM events e JOIN calendars c ON c.id=e.calendar_id" + where,
+                values,
+            ).fetchone()["total"]
+            rows = connection.execute(
+                EVENT_JOIN + where + " ORDER BY e.event_date DESC,e.id DESC LIMIT ? OFFSET ?",
+                (*values, page_size, (page - 1) * page_size),
+            ).fetchall()
+            total_pages = (total + page_size - 1) // page_size
+            pagination = {
+                "page": page,
+                "page_size": page_size,
+                "total": total,
+                "total_pages": total_pages,
+                "has_previous": page > 1,
+                "has_next": page < total_pages,
+            }
+        else:
+            rows = connection.execute(
+                EVENT_JOIN + where + " ORDER BY e.event_date DESC,e.id DESC LIMIT 2000", values
+            ).fetchall()
+            pagination = None
+    return {"events": [event_view(row) for row in rows], "query": query, "pagination": pagination}
 
 
 @app.get("/api/events/{event_id}")

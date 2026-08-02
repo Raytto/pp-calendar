@@ -23,6 +23,8 @@ const state = {
   editingEvent: null,
   selectedEvent: null,
   searchTimer: null,
+  searchPage: 1,
+  searchRequestId: 0,
   monthRequestId: 0,
   selectedDayDate: null,
 };
@@ -32,7 +34,7 @@ const els = {
   loginError: $("#loginError"), monthTitle: $("#monthTitle"), miniTitle: $("#miniTitle"),
   monthGrid: $("#monthGrid"), miniCalendar: $("#miniCalendar"), calendarFilters: $("#calendarFilters"),
   calendarView: $("#calendarView"), searchView: $("#searchView"), searchInput: $("#searchInput"),
-  searchSummary: $("#searchSummary"), searchResults: $("#searchResults"), eventDialog: $("#eventDialog"),
+  searchSummary: $("#searchSummary"), searchResults: $("#searchResults"), searchPagination: $("#searchPagination"), eventDialog: $("#eventDialog"),
   eventForm: $("#eventForm"), eventDialogTitle: $("#eventDialogTitle"), eventTitle: $("#eventTitle"),
   eventDate: $("#eventDate"), eventCalendar: $("#eventCalendar"), eventNotes: $("#eventNotes"),
   eventCalendarButton: $("#eventCalendarButton"), eventCalendarName: $("#eventCalendarName"),
@@ -567,21 +569,68 @@ async function createCalendar(event) {
 function openSearch() {
   els.calendarView.hidden = true;
   els.searchView.hidden = false;
+  $("#mobileFab").hidden = true;
   els.searchInput.focus();
 }
 
 function closeSearch() {
   els.searchView.hidden = true;
   els.calendarView.hidden = false;
+  $("#mobileFab").hidden = false;
 }
 
-async function search() {
+function searchPageItems(current, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, index) => index + 1);
+  const pages = [...new Set([1, total, current - 1, current, current + 1].filter((page) => page >= 1 && page <= total))].sort((a, b) => a - b);
+  const items = [];
+  pages.forEach((page, index) => {
+    if (index && page - pages[index - 1] > 1) items.push("ellipsis");
+    items.push(page);
+  });
+  return items;
+}
+
+function renderSearchPagination(pagination) {
+  els.searchPagination.replaceChildren();
+  els.searchPagination.hidden = !pagination || pagination.total_pages <= 1;
+  if (els.searchPagination.hidden) return;
+  const addButton = (label, targetPage, disabled = false, current = false) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.disabled = disabled;
+    if (current) button.setAttribute("aria-current", "page");
+    button.addEventListener("click", () => {
+      search(targetPage);
+      els.searchView.scrollTo({ top: 0, behavior: "smooth" });
+    });
+    els.searchPagination.append(button);
+  };
+  addButton("上一页", pagination.page - 1, !pagination.has_previous);
+  searchPageItems(pagination.page, pagination.total_pages).forEach((item) => {
+    if (item === "ellipsis") {
+      const ellipsis = document.createElement("span");
+      ellipsis.textContent = "…";
+      ellipsis.setAttribute("aria-hidden", "true");
+      els.searchPagination.append(ellipsis);
+    } else addButton(String(item), item, false, item === pagination.page);
+  });
+  addButton("下一页", pagination.page + 1, !pagination.has_next);
+}
+
+async function search(page = 1) {
   const query = els.searchInput.value.trim();
+  const requestId = ++state.searchRequestId;
+  state.searchPage = page;
   els.searchResults.replaceChildren();
+  renderSearchPagination(null);
   if (!query) { els.searchSummary.textContent = "输入关键词，搜索事件标题、备注和所属日历。"; return; }
   try {
-    const payload = await api(`/api/events?q=${encodeURIComponent(query)}`);
-    els.searchSummary.textContent = `找到 ${payload.events.length} 条与“${query}”相关的记录`;
+    const payload = await api(`/api/events?q=${encodeURIComponent(query)}&page=${page}&page_size=100`);
+    if (requestId !== state.searchRequestId) return;
+    const pagination = payload.pagination;
+    const pageLabel = pagination.total_pages > 1 ? ` · 第 ${pagination.page}/${pagination.total_pages} 页` : "";
+    els.searchSummary.textContent = `找到 ${pagination.total} 条与“${query}”相关的记录${pageLabel}`;
     if (!payload.events.length) {
       const empty = document.createElement("div"); empty.className = "empty-state"; empty.textContent = "没有找到相关记录";
       els.searchResults.append(empty); return;
@@ -601,6 +650,7 @@ async function search() {
       button.addEventListener("click", () => openDetail(event));
       els.searchResults.append(button);
     });
+    renderSearchPagination(pagination);
   } catch (error) { els.searchSummary.textContent = error.message; }
 }
 
@@ -688,7 +738,7 @@ $("#manageCalendarsButton").addEventListener("click", () => { showError(els.cale
 els.calendarForm.addEventListener("submit", createCalendar);
 $("#searchButton").addEventListener("click", openSearch);
 $("#closeSearch").addEventListener("click", closeSearch);
-els.searchInput.addEventListener("input", () => { clearTimeout(state.searchTimer); state.searchTimer = setTimeout(search, 220); });
+els.searchInput.addEventListener("input", () => { clearTimeout(state.searchTimer); state.searchPage = 1; state.searchTimer = setTimeout(() => search(1), 220); });
 els.accountButton.addEventListener("click", () => toggleAccountMenu());
 els.mobileAccountButton.addEventListener("click", () => {
   els.sidebar.classList.add("open");

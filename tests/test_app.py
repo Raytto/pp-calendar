@@ -59,7 +59,9 @@ def test_calendar_and_event_crud_search(tmp_path):
 
         ranged = client.get("/api/events?start=2026-08-01&end=2026-08-31").json()["events"]
         assert [item["id"] for item in ranged] == [event_id]
-        assert client.get("/api/events?q=关键词").json()["events"][0]["title"] == "学习 FastAPI"
+        search = client.get("/api/events?q=关键词").json()
+        assert search["events"][0]["title"] == "学习 FastAPI"
+        assert search["pagination"]["total"] == 1
 
         updated = client.patch(
             f"/api/events/{event_id}", headers=headers,
@@ -99,3 +101,32 @@ def test_logout_invalidates_session(tmp_path):
         response = client.post("/api/logout", headers={"X-CSRF-Token": csrf})
         assert response.status_code == 200
         assert client.get("/api/calendars").status_code == 401
+
+
+def test_search_pagination_is_limited_to_one_hundred(tmp_path):
+    with make_client(tmp_path) as client:
+        login(client)
+        calendar_id = client.get("/api/calendars").json()["calendars"][0]["id"]
+        with main.write_lock, main.db() as connection:
+            connection.executemany(
+                "INSERT INTO events(title,event_date,calendar_id,notes,created_at,updated_at) VALUES(?,?,?,?,?,?)",
+                [
+                    (f"分页记录 {index}", "2026-08-03", calendar_id, "", "2026-08-03T00:00:00+00:00", "2026-08-03T00:00:00+00:00")
+                    for index in range(205)
+                ],
+            )
+            connection.commit()
+
+        first = client.get("/api/events?q=分页记录&page=1&page_size=100")
+        second = client.get("/api/events?q=分页记录&page=2&page_size=100")
+        third = client.get("/api/events?q=分页记录&page=3&page_size=100")
+        assert len(first.json()["events"]) == 100
+        assert len(second.json()["events"]) == 100
+        assert len(third.json()["events"]) == 5
+        assert first.json()["events"][0]["title"] == "分页记录 204"
+        assert first.json()["pagination"] == {
+            "page": 1, "page_size": 100, "total": 205, "total_pages": 3,
+            "has_previous": False, "has_next": True,
+        }
+        assert third.json()["pagination"]["has_next"] is False
+        assert client.get("/api/events?q=分页记录&page_size=101").status_code == 422
