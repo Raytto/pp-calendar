@@ -1,6 +1,12 @@
 "use strict";
 
 const $ = (selector) => document.querySelector(selector);
+const STANDARD_CALENDAR_COLORS = [
+  "#AD1457", "#F4511E", "#E4C441", "#0B8043", "#3F51B5", "#8E24AA",
+  "#D81B60", "#EF6C00", "#C0CA33", "#009688", "#7986CB", "#795548",
+  "#D50000", "#F09300", "#7CB342", "#039BE5", "#B39DDB", "#616161",
+  "#E67C73", "#F6BF26", "#33B679", "#4285F4", "#9E69AF", "#A79B8E",
+];
 
 function monthFromPath(pathname = window.location.pathname) {
   const match = pathname.match(/^\/month\/(\d{4})\/(\d{1,2})\/(\d{1,2})\/?$/);
@@ -27,6 +33,7 @@ const state = {
   searchRequestId: 0,
   monthRequestId: 0,
   selectedDayDate: null,
+  optionsCalendarId: null,
 };
 
 const els = {
@@ -49,6 +56,9 @@ const els = {
   monthJumpDialog: $("#monthJumpDialog"), monthJumpForm: $("#monthJumpForm"), monthJumpInput: $("#monthJumpInput"),
   dayEventsDialog: $("#dayEventsDialog"), dayEventsTitle: $("#dayEventsTitle"), dayEventsWeekday: $("#dayEventsWeekday"),
   dayEventsList: $("#dayEventsList"), dayAddEventButton: $("#dayAddEventButton"),
+  calendarOptionsMenu: $("#calendarOptionsMenu"), calendarOptionsTitle: $("#calendarOptionsTitle"),
+  calendarVisibilityAction: $("#calendarVisibilityAction"), calendarOptionsPalette: $("#calendarOptionsPalette"),
+  calendarCreatePalette: $("#calendarCreatePalette"),
 };
 
 function isoDate(value) {
@@ -194,28 +204,115 @@ function showSavedEvent(savedEvent) {
   renderMonth();
 }
 
+function saveVisibleCalendars() {
+  localStorage.setItem("pp-calendar-visible", JSON.stringify([...state.visibleCalendars]));
+}
+
+function renderStandardColorPalette(container, selectedColor, onSelect) {
+  container.replaceChildren();
+  STANDARD_CALENDAR_COLORS.forEach((color, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "standard-color-option";
+    button.style.setProperty("--palette-color", color);
+    button.setAttribute("role", "radio");
+    button.setAttribute("aria-checked", String(color === selectedColor));
+    button.setAttribute("aria-label", `标准颜色 ${index + 1}`);
+    button.title = color;
+    button.addEventListener("click", () => onSelect(color));
+    container.append(button);
+  });
+}
+
+function setCalendarCreateColor(color) {
+  $("#calendarColor").value = color;
+  renderStandardColorPalette(els.calendarCreatePalette, color, setCalendarCreateColor);
+}
+
+function closeCalendarOptions() {
+  els.calendarOptionsMenu.hidden = true;
+  state.optionsCalendarId = null;
+  els.calendarFilters.querySelectorAll(".calendar-row-more").forEach((button) => button.setAttribute("aria-expanded", "false"));
+}
+
+function openCalendarOptions(calendar, anchor) {
+  closeCalendarOptions();
+  state.optionsCalendarId = calendar.id;
+  els.calendarOptionsTitle.textContent = calendar.name;
+  els.calendarVisibilityAction.textContent = state.visibleCalendars.has(calendar.id) ? "隐藏此日历" : "显示此日历";
+  renderStandardColorPalette(els.calendarOptionsPalette, calendar.color, (color) => updateCalendarColor(calendar.id, color));
+  anchor.setAttribute("aria-expanded", "true");
+  els.calendarOptionsMenu.hidden = false;
+  requestAnimationFrame(() => {
+    const anchorBox = anchor.getBoundingClientRect();
+    const width = els.calendarOptionsMenu.offsetWidth;
+    const height = els.calendarOptionsMenu.offsetHeight;
+    const margin = 8;
+    let left = anchorBox.right + 6;
+    if (left + width > window.innerWidth - margin) left = anchorBox.left - width - 6;
+    left = Math.max(margin, Math.min(window.innerWidth - width - margin, left));
+    let top = anchorBox.top - 10;
+    if (top + height > window.innerHeight - margin) top = window.innerHeight - height - margin;
+    els.calendarOptionsMenu.style.left = `${left}px`;
+    els.calendarOptionsMenu.style.top = `${Math.max(margin, top)}px`;
+  });
+}
+
+async function updateCalendarColor(calendarId, color) {
+  const calendar = state.calendars.find((item) => item.id === calendarId);
+  if (!calendar || calendar.color === color) { closeCalendarOptions(); return; }
+  try {
+    await api(`/api/calendars/${calendarId}`, { method: "PATCH", body: { color } });
+    closeCalendarOptions();
+    await loadCalendars();
+    await loadMonth();
+    toast("日历颜色已更新");
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
 function renderCalendarFilters() {
+  closeCalendarOptions();
   els.calendarFilters.replaceChildren();
   state.calendars.forEach((calendar) => {
+    const row = document.createElement("div");
+    row.className = "filter-row";
+    row.dataset.calendarId = calendar.id;
+    row.style.setProperty("--calendar-color", calendar.color);
     const label = document.createElement("label");
-    label.className = "filter-row";
-    label.style.setProperty("--calendar-color", calendar.color);
+    label.className = "filter-toggle";
     const input = document.createElement("input");
     input.type = "checkbox";
     input.checked = state.visibleCalendars.has(calendar.id);
     input.addEventListener("change", () => {
       if (input.checked) state.visibleCalendars.add(calendar.id);
       else state.visibleCalendars.delete(calendar.id);
-      localStorage.setItem("pp-calendar-visible", JSON.stringify([...state.visibleCalendars]));
+      saveVisibleCalendars();
       renderMonth();
     });
     const check = document.createElement("span");
     check.className = "filter-check";
     check.setAttribute("aria-hidden", "true");
     const name = document.createElement("span");
+    name.className = "filter-name";
     name.textContent = calendar.name;
     label.append(input, check, name);
-    els.calendarFilters.append(label);
+    const more = document.createElement("button");
+    more.type = "button";
+    more.className = "calendar-row-more";
+    more.textContent = "⋮";
+    more.title = `“${calendar.name}”的选项`;
+    more.setAttribute("aria-label", `“${calendar.name}”的选项`);
+    more.setAttribute("aria-haspopup", "menu");
+    more.setAttribute("aria-expanded", "false");
+    more.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (state.optionsCalendarId === calendar.id && !els.calendarOptionsMenu.hidden) closeCalendarOptions();
+      else openCalendarOptions(calendar, more);
+    });
+    row.append(label, more);
+    els.calendarFilters.append(row);
   });
 }
 
@@ -529,15 +626,17 @@ function renderCalendarManager() {
   state.calendars.forEach((calendar) => {
     const row = document.createElement("div");
     row.className = "calendar-manage-row";
-    const color = document.createElement("input");
-    color.type = "color"; color.value = calendar.color;
+    row.dataset.calendarId = calendar.id;
+    const color = document.createElement("span");
+    color.className = "calendar-manage-color";
+    color.style.setProperty("--calendar-color", calendar.color);
     const name = document.createElement("input");
     name.type = "text"; name.maxLength = 60; name.value = calendar.name;
     const save = document.createElement("button");
     save.textContent = "保存";
     save.addEventListener("click", async () => {
       try {
-        await api(`/api/calendars/${calendar.id}`, { method: "PATCH", body: { name: name.value.trim(), color: color.value } });
+        await api(`/api/calendars/${calendar.id}`, { method: "PATCH", body: { name: name.value.trim() } });
         await loadCalendars(); await loadMonth(); renderCalendarManager(); toast("日历已更新");
       } catch (error) { showError(els.calendarError, error.message); }
     });
@@ -563,8 +662,8 @@ async function createCalendar(event) {
   try {
     const created = await api("/api/calendars", { method: "POST", body: { name: $("#calendarName").value.trim(), color: $("#calendarColor").value } });
     state.visibleCalendars.add(created.calendar.id);
-    localStorage.setItem("pp-calendar-visible", JSON.stringify([...state.visibleCalendars]));
-    els.calendarForm.reset(); $("#calendarColor").value = "#4856B7";
+    saveVisibleCalendars();
+    els.calendarForm.reset(); setCalendarCreateColor("#3F51B5");
     await loadCalendars(); renderCalendarManager(); toast("日历已创建");
   } catch (error) { showError(els.calendarError, error.message); }
 }
@@ -658,6 +757,7 @@ async function search(page = 1) {
 }
 
 function closeSidebar() {
+  closeCalendarOptions();
   els.sidebar.classList.remove("open");
   els.sidebarBackdrop.hidden = true;
   toggleAccountMenu(false);
@@ -710,6 +810,31 @@ els.dayAddEventButton.addEventListener("click", () => {
 els.dayEventsDialog.addEventListener("click", (event) => {
   if (event.target === els.dayEventsDialog) els.dayEventsDialog.close();
 });
+els.calendarOptionsMenu.querySelectorAll("[data-calendar-action]").forEach((button) => button.addEventListener("click", () => {
+  const calendarId = state.optionsCalendarId;
+  if (!calendarId) return;
+  if (button.dataset.calendarAction === "only") {
+    closeCalendarOptions();
+    state.visibleCalendars = new Set([calendarId]);
+    saveVisibleCalendars();
+    renderCalendarFilters();
+    renderMonth();
+  } else if (button.dataset.calendarAction === "visibility") {
+    const visible = state.visibleCalendars.has(calendarId);
+    closeCalendarOptions();
+    if (visible) state.visibleCalendars.delete(calendarId);
+    else state.visibleCalendars.add(calendarId);
+    saveVisibleCalendars();
+    renderCalendarFilters();
+    renderMonth();
+  } else if (button.dataset.calendarAction === "manage") {
+    closeCalendarOptions();
+    showError(els.calendarError);
+    renderCalendarManager();
+    els.calendarDialog.showModal();
+    requestAnimationFrame(() => els.calendarManageList.querySelector(`[data-calendar-id="${calendarId}"] input`)?.focus());
+  }
+}));
 els.eventCalendarButton.addEventListener("click", () => toggleEventCalendarMenu());
 els.eventCalendarButton.addEventListener("keydown", (event) => {
   if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
@@ -760,8 +885,10 @@ els.sidebarBackdrop.addEventListener("click", closeSidebar);
 document.addEventListener("click", (event) => {
   if (!els.accountMenu.hidden && !event.target.closest(".sidebar-account") && event.target !== els.mobileAccountButton) toggleAccountMenu(false);
   if (!els.eventCalendarMenu.hidden && !event.target.closest(".calendar-select-field")) toggleEventCalendarMenu(false);
+  if (!els.calendarOptionsMenu.hidden && !event.target.closest("#calendarOptionsMenu") && !event.target.closest(".calendar-row-more")) closeCalendarOptions();
 });
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !els.calendarOptionsMenu.hidden) { closeCalendarOptions(); return; }
   if (event.key === "Escape" && !els.searchView.hidden && !document.querySelector("dialog[open]")) closeSearch();
   if (event.key === "/" && els.searchView.hidden && !document.querySelector("dialog[open]")) { event.preventDefault(); openSearch(); }
   if (event.key === "ArrowLeft" && event.altKey) moveMonth(-1);
@@ -779,17 +906,21 @@ els.monthGrid.addEventListener("touchend", (event) => {
 let resizeRenderFrame;
 function scheduleMonthRender() {
   cancelAnimationFrame(resizeRenderFrame);
+  if (!els.calendarOptionsMenu.hidden) closeCalendarOptions();
   resizeRenderFrame = requestAnimationFrame(() => { if (!els.appView.hidden) renderMonth(); });
 }
 window.addEventListener("resize", scheduleMonthRender);
 window.visualViewport?.addEventListener("resize", scheduleMonthRender);
 if (window.ResizeObserver) new ResizeObserver(scheduleMonthRender).observe(els.monthGrid);
+els.calendarFilters.addEventListener("scroll", closeCalendarOptions, { passive: true });
 window.addEventListener("popstate", () => {
   const value = monthFromPath();
   if (!value || els.appView.hidden) return;
   state.cursor = value;
   loadMonth().catch((error) => toast(error.message));
 });
+
+setCalendarCreateColor("#3F51B5");
 
 (async function bootstrap() {
   try {

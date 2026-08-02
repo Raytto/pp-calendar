@@ -8,7 +8,7 @@
   <title>PP Calendar</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <script src="/static/theme.js?v=1"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=9">
+  <link rel="stylesheet" href="/static/styles.css?v=10">
 </head>
 <body>
   <div id="loginView" class="login-page" hidden>
@@ -109,6 +109,15 @@
       </main>
     </div>
     <button id="mobileFab" class="mobile-fab" aria-label="新建事件">＋</button>
+    <div id="calendarOptionsMenu" class="calendar-options-menu" role="menu" hidden>
+      <strong id="calendarOptionsTitle"></strong>
+      <button type="button" data-calendar-action="only" role="menuitem">仅显示此日历</button>
+      <button id="calendarVisibilityAction" type="button" data-calendar-action="visibility" role="menuitem"></button>
+      <button type="button" data-calendar-action="manage" role="menuitem">重命名与管理</button>
+      <div class="calendar-options-divider"></div>
+      <span class="calendar-options-label">日历颜色</span>
+      <div id="calendarOptionsPalette" class="standard-color-palette compact" role="radiogroup" aria-label="选择日历颜色"></div>
+    </div>
   </div>
 
   <dialog id="eventDialog" class="modal event-modal">
@@ -175,7 +184,11 @@
     <div id="calendarManageList" class="calendar-manage-list"></div>
     <form id="calendarForm" class="calendar-create-form">
       <input id="calendarName" maxlength="60" placeholder="新日历名称" required>
-      <input id="calendarColor" type="color" value="#4856B7" aria-label="日历颜色">
+      <input id="calendarColor" type="hidden" value="#3F51B5">
+      <div class="calendar-create-color">
+        <span>选择颜色</span>
+        <div id="calendarCreatePalette" class="standard-color-palette" role="radiogroup" aria-label="新日历颜色"></div>
+      </div>
       <button class="primary-button compact" type="submit">添加</button>
     </form>
     <p id="calendarError" class="form-error" role="alert" hidden></p>
@@ -198,6 +211,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <script src="/static/app.js?v=17" defer></script>
+  <script src="/static/app.js?v=18" defer></script>
 </body>
 </html>

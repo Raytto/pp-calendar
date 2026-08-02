@@ -45,7 +45,7 @@ def test_calendar_and_event_crud_search(tmp_path):
         assert [item["name"] for item in calendars] == ["工作日志", "生活日志", "周期事件", "好事发生"]
 
         created_calendar = client.post(
-            "/api/calendars", headers=headers, json={"name": "学习", "color": "#227755"}
+            "/api/calendars", headers=headers, json={"name": "学习", "color": "#0B8043"}
         )
         assert created_calendar.status_code == 201
         calendar_id = created_calendar.json()["calendar"]["id"]
@@ -93,6 +93,11 @@ def test_csrf_validation_and_input_boundaries(tmp_path):
             "/api/calendars", headers={"X-CSRF-Token": csrf}, json={"name": "坏颜色", "color": "red"}
         )
         assert bad_color.status_code == 422
+        custom_color = client.post(
+            "/api/calendars", headers={"X-CSRF-Token": csrf}, json={"name": "自定义颜色", "color": "#123456"}
+        )
+        assert custom_color.status_code == 422
+        assert main.standard_calendar_color("#A62B5B") == "#AD1457"
 
 
 def test_logout_invalidates_session(tmp_path):

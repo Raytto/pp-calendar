@@ -28,6 +28,12 @@ COOKIE_NAME = "pp_calendar_session"
 SESSION_DAYS = 30
 COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+CALENDAR_COLORS = (
+    "#AD1457", "#F4511E", "#E4C441", "#0B8043", "#3F51B5", "#8E24AA",
+    "#D81B60", "#EF6C00", "#C0CA33", "#009688", "#7986CB", "#795548",
+    "#D50000", "#F09300", "#7CB342", "#039BE5", "#B39DDB", "#616161",
+    "#E67C73", "#F6BF26", "#33B679", "#4285F4", "#9E69AF", "#A79B8E",
+)
 write_lock = threading.RLock()
 login_attempts: dict[str, deque[float]] = defaultdict(deque)
 
@@ -57,6 +63,22 @@ def verify_password(password: str, encoded: str) -> bool:
 
 def token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def standard_calendar_color(value: str) -> str:
+    color = value.upper()
+    if color in CALENDAR_COLORS:
+        return color
+    if not COLOR_RE.fullmatch(color):
+        return CALENDAR_COLORS[4]
+
+    def distance(candidate: str) -> int:
+        return sum(
+            (int(color[index:index + 2], 16) - int(candidate[index:index + 2], 16)) ** 2
+            for index in (1, 3, 5)
+        )
+
+    return min(CALENDAR_COLORS, key=distance)
 
 
 @contextmanager
@@ -109,15 +131,22 @@ def initialize_database() -> None:
         if existing == 0:
             created = now_iso()
             defaults = [
-                ("工作日志", "#A62B5B", 0),
-                ("生活日志", "#4856B7", 1),
-                ("周期事件", "#8A3CB2", 2),
-                ("好事发生", "#E07A18", 3),
+                ("工作日志", "#AD1457", 0),
+                ("生活日志", "#3F51B5", 1),
+                ("周期事件", "#8E24AA", 2),
+                ("好事发生", "#EF6C00", 3),
             ]
             connection.executemany(
                 "INSERT INTO calendars(name,color,sort_order,created_at,updated_at) VALUES(?,?,?,?,?)",
                 [(name, color, order, created, created) for name, color, order in defaults],
             )
+        for calendar in connection.execute("SELECT id,color FROM calendars").fetchall():
+            standard = standard_calendar_color(calendar["color"])
+            if standard != calendar["color"]:
+                connection.execute(
+                    "UPDATE calendars SET color=?,updated_at=? WHERE id=?",
+                    (standard, now_iso(), calendar["id"]),
+                )
         connection.execute("DELETE FROM sessions WHERE expires_at < ?", (int(time.time()),))
         connection.commit()
 
@@ -135,9 +164,10 @@ class CalendarInput(BaseModel):
     @field_validator("color")
     @classmethod
     def valid_color(cls, value: str) -> str:
-        if not COLOR_RE.fullmatch(value):
-            raise ValueError("颜色格式无效")
-        return value.upper()
+        color = value.upper()
+        if color not in CALENDAR_COLORS:
+            raise ValueError("请选择标准日历颜色")
+        return color
 
 
 class CalendarUpdate(BaseModel):
@@ -148,9 +178,12 @@ class CalendarUpdate(BaseModel):
     @field_validator("color")
     @classmethod
     def valid_color(cls, value: str | None) -> str | None:
-        if value is not None and not COLOR_RE.fullmatch(value):
-            raise ValueError("颜色格式无效")
-        return value.upper() if value else value
+        if value is None:
+            return value
+        color = value.upper()
+        if color not in CALENDAR_COLORS:
+            raise ValueError("请选择标准日历颜色")
+        return color
 
 
 class EventInput(BaseModel):
