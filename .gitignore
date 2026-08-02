@@ -3,4 +3,16 @@
 __pycache__/
 *.py[cod]
 .DS_Store
-
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite3
+*.db
+*.pem
+*.key
+*.p12
+*.pfx
+*.ical
+*.ics
+*.zip

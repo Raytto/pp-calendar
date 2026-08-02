@@ -2,6 +2,8 @@
 
 PP 私人日历，公网入口为 `https://calendar.pangruitao.com/`。功能借鉴 Google Calendar 的月视图体验，视觉沿用 PP Agent 的深靛蓝、琥珀黄与浅色纸面风格。
 
+源码仓库：`https://github.com/Raytto/pp-calendar`。数据库、环境变量、证书私钥和日历导入原始文件均不进入 Git。
+
 ## 功能
 
 - 仅支持按天记录的月视图；支持前后翻月、回到今天、触控左右滑动。

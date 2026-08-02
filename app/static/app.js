@@ -172,6 +172,23 @@ async function loadMonth() {
   renderMobileMonthStrip();
 }
 
+function showCalendar(calendarId) {
+  if (state.visibleCalendars.has(calendarId)) return;
+  state.visibleCalendars.add(calendarId);
+  localStorage.setItem("pp-calendar-visible", JSON.stringify([...state.visibleCalendars]));
+  renderCalendarFilters();
+}
+
+function showSavedEvent(savedEvent) {
+  showCalendar(savedEvent.calendar_id);
+  state.events = state.events.filter((event) => event.id !== savedEvent.id);
+  const first = isoDate(monthStartGrid(state.cursor));
+  const last = isoDate(addDays(monthStartGrid(state.cursor), 41));
+  if (savedEvent.event_date >= first && savedEvent.event_date <= last) state.events.push(savedEvent);
+  state.events.sort((left, right) => right.event_date.localeCompare(left.event_date) || right.id - left.id);
+  renderMonth();
+}
+
 function renderCalendarFilters() {
   els.calendarFilters.replaceChildren();
   state.calendars.forEach((calendar) => {
@@ -467,14 +484,26 @@ async function saveEvent(event) {
     title: els.eventTitle.value.trim(), event_date: els.eventDate.value,
     calendar_id: Number(els.eventCalendar.value), notes: els.eventNotes.value.trim(),
   };
+  const editing = Boolean(state.editingEvent);
+  let savedEvent;
   try {
-    if (state.editingEvent) await api(`/api/events/${state.editingEvent.id}`, { method: "PATCH", body: payload });
-    else await api("/api/events", { method: "POST", body: payload });
-    els.eventDialog.close();
+    const result = editing
+      ? await api(`/api/events/${state.editingEvent.id}`, { method: "PATCH", body: payload })
+      : await api("/api/events", { method: "POST", body: payload });
+    savedEvent = result.event;
+  } catch (error) {
+    showError(els.eventError, error.message);
+    return;
+  }
+  showSavedEvent(savedEvent);
+  els.eventDialog.close();
+  toast(editing ? "事件已更新" : "事件已创建");
+  try {
     await loadCalendars();
     await loadMonth();
-    toast(state.editingEvent ? "事件已更新" : "事件已创建");
-  } catch (error) { showError(els.eventError, error.message); }
+  } catch (_error) {
+    toast("事件已保存；后台刷新暂时失败");
+  }
 }
 
 async function deleteEvent() {
