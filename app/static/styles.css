@@ -71,7 +71,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .month-title-button:hover { color: var(--indigo); background: var(--indigo-pale); }
 .month-title-button #monthTitle { font-size: 21px; font-weight: 650; letter-spacing: -.45px; }
 .month-title-caret { color: var(--ink-soft); font-size: 12px; }
-.month-heading > p { margin: 0 0 0 6px; color: #858895; font-size: 10px; }
 .avatar-button { width: 38px; height: 38px; padding: 0; border: 2px solid #fff; border-radius: 50%; color: #fff; background: linear-gradient(145deg, #d89734, #354381); box-shadow: 0 0 0 1px #bbc0cf; cursor: pointer; font-size: 10px; font-weight: 850; }
 .mobile-account-button { display: none; }
 .mobile-month-strip { display: none; }
@@ -232,7 +231,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 [data-theme="dark"] body,
 [data-theme="dark"] .app-shell { background: var(--canvas); }
 [data-theme="dark"] .topbar { border-color: #343640; background: rgba(31,32,37,.96); }
-[data-theme="dark"] .month-heading > p,
 [data-theme="dark"] .weekday-row span,
 [data-theme="dark"] .result-date span,
 [data-theme="dark"] .result-calendar,
@@ -269,7 +267,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .mobile-only { display: inline-grid; }
   .mobile-account-button { display: block; }
   .wordmark { margin-right: 2px; }
-  .wordmark strong, .wordmark .brand-mark, #monthSubtitle, .topbar-actions .compact { display: none; }
+  .wordmark strong, .wordmark .brand-mark, .topbar-actions .compact { display: none; }
   .month-title-button #monthTitle { font-size: 17px; }
   .outline-button { min-height: 35px; padding: 0 12px; font-size: 12px; }
   .month-navigation .icon-button { width: 32px; height: 34px; }
