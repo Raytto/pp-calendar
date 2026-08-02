@@ -35,3 +35,9 @@ uv run pytest -q
 ```
 
 真实密码只保存在服务器 `/etc/pp-calendar.env` 的哈希中；明文不写入源码、Git、数据库或知识库。
+
+## Google Calendar 数据导入
+
+2026-08-03 从 Google Calendar Takeout 的 9 个 ICS 日历导入 7,310 条原始事件；24 条年度重复规则被展开为实际日期，最终写入 9,082 条按日记录，范围为 1994-01-08 至 2100-12-31。另按原日历列表恢复了 ICS 不包含的空 `Tasks` 分类，合计 10 个日历分类。
+
+导入前快照位于 `/srv/backups/pp-calendar/pre-google-import-20260803-013033.sqlite`。该快照只有导入前的 4 个默认日历和 0 条事件。

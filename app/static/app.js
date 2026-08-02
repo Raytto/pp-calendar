@@ -113,9 +113,18 @@ async function loadCalendars() {
   const prior = new Set(state.visibleCalendars);
   state.calendars = payload.calendars;
   const saved = JSON.parse(localStorage.getItem("pp-calendar-visible") || "null");
-  const wanted = prior.size ? prior : new Set(Array.isArray(saved) ? saved : state.calendars.map((item) => item.id));
+  const savedKnown = JSON.parse(localStorage.getItem("pp-calendar-known") || "null");
+  let wanted;
+  if (prior.size) wanted = prior;
+  else if (!Array.isArray(saved) || !Array.isArray(savedKnown)) wanted = new Set(state.calendars.map((item) => item.id));
+  else {
+    wanted = new Set(saved);
+    const known = new Set(savedKnown);
+    state.calendars.forEach((item) => { if (!known.has(item.id)) wanted.add(item.id); });
+  }
   state.visibleCalendars = new Set(state.calendars.filter((item) => wanted.has(item.id)).map((item) => item.id));
-  if (!prior.size && !saved) state.visibleCalendars = new Set(state.calendars.map((item) => item.id));
+  localStorage.setItem("pp-calendar-visible", JSON.stringify([...state.visibleCalendars]));
+  localStorage.setItem("pp-calendar-known", JSON.stringify(state.calendars.map((item) => item.id)));
   renderCalendarFilters();
   renderEventCalendarOptions();
 }
