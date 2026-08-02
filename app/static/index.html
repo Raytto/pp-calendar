@@ -8,7 +8,7 @@
   <title>PP Calendar</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <script src="/static/theme.js?v=1"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=3">
+  <link rel="stylesheet" href="/static/styles.css?v=4">
 </head>
 <body>
   <div id="loginView" class="login-page" hidden>
@@ -97,7 +97,7 @@
             <span><i>周一</i><b>一</b></span><span><i>周二</i><b>二</b></span><span><i>周三</i><b>三</b></span>
             <span><i>周四</i><b>四</b></span><span><i>周五</i><b>五</b></span><span><i>周六</i><b>六</b></span><span><i>周日</i><b>日</b></span>
           </div>
-          <div id="monthGrid" class="month-grid" aria-label="月历"></div>
+          <div id="monthGrid" class="month-grid" role="grid" aria-label="月历"></div>
         </section>
         <section id="searchView" class="search-view" hidden>
           <div class="search-header">
@@ -148,6 +148,17 @@
     <div class="modal-actions"><span></span><button id="editEventButton" class="primary-button compact">编辑事件</button></div>
   </dialog>
 
+  <dialog id="dayEventsDialog" class="modal day-events-modal" aria-labelledby="dayEventsTitle">
+    <div class="day-events-panel">
+      <div class="modal-heading day-events-heading">
+        <div><p id="dayEventsWeekday" class="eyebrow"></p><h2 id="dayEventsTitle"></h2></div>
+        <button class="icon-button close-dialog" type="button" aria-label="关闭">×</button>
+      </div>
+      <div id="dayEventsList" class="day-events-list"></div>
+      <button id="dayAddEventButton" class="day-add-event" type="button">＋ 添加当天记录</button>
+    </div>
+  </dialog>
+
   <dialog id="calendarDialog" class="modal calendar-modal">
     <div class="modal-heading">
       <div><p class="eyebrow">MY CALENDARS</p><h2>管理日历</h2></div>
@@ -179,6 +190,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <script src="/static/app.js?v=8" defer></script>
+  <script src="/static/app.js?v=9" defer></script>
 </body>
 </html>

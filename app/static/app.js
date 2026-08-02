@@ -24,6 +24,7 @@ const state = {
   selectedEvent: null,
   searchTimer: null,
   monthRequestId: 0,
+  selectedDayDate: null,
 };
 
 const els = {
@@ -42,6 +43,8 @@ const els = {
   accountMenu: $("#accountMenu"), accountButton: $("#accountButton"), mobileAccountButton: $("#mobileAccountButton"),
   mobileMonthStrip: $("#mobileMonthStrip"), themeStatus: $("#themeStatus"), toast: $("#toast"),
   monthJumpDialog: $("#monthJumpDialog"), monthJumpForm: $("#monthJumpForm"), monthJumpInput: $("#monthJumpInput"),
+  dayEventsDialog: $("#dayEventsDialog"), dayEventsTitle: $("#dayEventsTitle"), dayEventsWeekday: $("#dayEventsWeekday"),
+  dayEventsList: $("#dayEventsList"), dayAddEventButton: $("#dayAddEventButton"),
 };
 
 function isoDate(value) {
@@ -78,6 +81,17 @@ function readableTextColor(hex) {
   const blue = parseInt(value.slice(4, 6), 16);
   const luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255;
   return luminance > 0.58 ? "#15161a" : "#ffffff";
+}
+
+function visibleEventCapacity(eventCount) {
+  const mobile = window.innerWidth <= 560;
+  const rowHeight = els.monthGrid.clientHeight ? els.monthGrid.clientHeight / 6 : (mobile ? 112 : 132);
+  const cellPaddingAndHeader = mobile ? 29 : 35;
+  const chipStep = mobile ? 22 : 24;
+  const moreHeight = mobile ? 16 : 15;
+  const withoutOverflow = Math.max(1, Math.floor((rowHeight - cellPaddingAndHeader) / chipStep));
+  if (eventCount <= withoutOverflow) return Math.min(eventCount, mobile ? 3 : 4);
+  return Math.max(1, Math.min(mobile ? 3 : 4, Math.floor((rowHeight - cellPaddingAndHeader - moreHeight) / chipStep)));
 }
 
 async function api(path, options = {}) {
@@ -213,7 +227,7 @@ function renderMonth() {
     cell.className = "day-cell" + (current.getMonth() !== month ? " outside" : "");
     cell.dataset.date = key;
     cell.tabIndex = 0;
-    cell.setAttribute("role", "button");
+    cell.setAttribute("role", "gridcell");
     cell.setAttribute("aria-label", `${fullDateLabel(key)}，新建事件`);
     const numberRow = document.createElement("div");
     numberRow.className = "day-number-row";
@@ -227,8 +241,7 @@ function renderMonth() {
     const eventBox = document.createElement("div");
     eventBox.className = "day-events";
     const events = eventMap.get(key) || [];
-    const mobileRowHeight = els.monthGrid.clientHeight ? els.monthGrid.clientHeight / 6 : 88;
-    const maxVisible = window.innerWidth <= 560 ? Math.max(2, Math.min(4, Math.floor((mobileRowHeight - 28) / 22))) : 4;
+    const maxVisible = visibleEventCapacity(events.length);
     events.slice(0, maxVisible).forEach((event) => {
       const chip = document.createElement("button");
       chip.className = "event-chip";
@@ -240,15 +253,22 @@ function renderMonth() {
       eventBox.append(chip);
     });
     if (events.length > maxVisible) {
-      const more = document.createElement("span");
+      const more = document.createElement("button");
+      more.type = "button";
       more.className = "more-events";
-      more.textContent = window.innerWidth <= 560 ? "•••" : `另有 ${events.length - maxVisible} 项`;
+      more.textContent = window.innerWidth <= 560 ? `+${events.length - maxVisible} 项` : `另有 ${events.length - maxVisible} 项`;
       more.title = `另有 ${events.length - maxVisible} 项`;
+      more.setAttribute("aria-label", `${fullDateLabel(key)}，另有 ${events.length - maxVisible} 项，查看当天全部事件`);
+      more.addEventListener("click", (clickEvent) => {
+        clickEvent.stopPropagation();
+        openDayEvents(key, events, cell);
+      });
       eventBox.append(more);
     }
     cell.append(numberRow, eventBox);
     cell.addEventListener("click", () => openEventEditor(null, key));
     cell.addEventListener("keydown", (event) => {
+      if (event.target !== cell) return;
       if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openEventEditor(null, key); }
     });
     els.monthGrid.append(cell);
@@ -344,6 +364,51 @@ function openDetail(event) {
   els.detailCalendar.textContent = event.calendar_name;
   els.detailNotes.textContent = event.notes || "没有备注";
   els.detailDialog.showModal();
+}
+
+function openDayEvents(eventDate, events, anchor) {
+  state.selectedDayDate = eventDate;
+  const parsed = parseDate(eventDate);
+  els.dayEventsWeekday.textContent = new Intl.DateTimeFormat("zh-CN", { weekday: "long" }).format(parsed);
+  els.dayEventsTitle.textContent = `${parsed.getMonth() + 1}月${parsed.getDate()}日 · ${events.length} 项`;
+  els.dayEventsList.replaceChildren();
+  events.forEach((event) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "day-agenda-item";
+    button.style.setProperty("--event-color", event.calendar_color);
+    const color = document.createElement("span");
+    color.className = "day-agenda-color";
+    const copy = document.createElement("span");
+    copy.className = "day-agenda-copy";
+    const title = document.createElement("strong");
+    title.textContent = event.title;
+    const meta = document.createElement("small");
+    meta.textContent = event.calendar_name;
+    copy.append(title, meta);
+    const arrow = document.createElement("span");
+    arrow.className = "day-agenda-arrow";
+    arrow.textContent = "›";
+    button.append(color, copy, arrow);
+    button.addEventListener("click", () => {
+      els.dayEventsDialog.close();
+      openDetail(event);
+    });
+    els.dayEventsList.append(button);
+  });
+  els.dayEventsDialog.showModal();
+  requestAnimationFrame(() => {
+    const dialog = els.dayEventsDialog;
+    const rect = anchor.getBoundingClientRect();
+    const margin = 12;
+    const width = dialog.offsetWidth;
+    const height = dialog.offsetHeight;
+    const left = Math.max(margin, Math.min(window.innerWidth - width - margin, rect.left + rect.width / 2 - width / 2));
+    let top = rect.bottom + 8;
+    if (top + height > window.innerHeight - margin) top = Math.max(margin, rect.top - height - 8);
+    dialog.style.left = `${left}px`;
+    dialog.style.top = `${top}px`;
+  });
 }
 
 async function saveEvent(event) {
@@ -504,6 +569,14 @@ $("#sidebarCreate").addEventListener("click", () => { closeSidebar(); openEventE
 els.eventForm.addEventListener("submit", saveEvent);
 els.deleteEventButton.addEventListener("click", deleteEvent);
 $("#editEventButton").addEventListener("click", () => { const event = state.selectedEvent; els.detailDialog.close(); openEventEditor(event); });
+els.dayAddEventButton.addEventListener("click", () => {
+  const eventDate = state.selectedDayDate;
+  els.dayEventsDialog.close();
+  openEventEditor(null, eventDate);
+});
+els.dayEventsDialog.addEventListener("click", (event) => {
+  if (event.target === els.dayEventsDialog) els.dayEventsDialog.close();
+});
 $("#manageCalendarsButton").addEventListener("click", () => { showError(els.calendarError); renderCalendarManager(); els.calendarDialog.showModal(); });
 els.calendarForm.addEventListener("submit", createCalendar);
 $("#searchButton").addEventListener("click", openSearch);

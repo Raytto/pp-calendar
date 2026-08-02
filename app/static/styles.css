@@ -141,7 +141,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .day-events { display: grid; gap: 3px; }
 .event-chip { min-width: 0; height: 21px; display: flex; align-items: center; padding: 0 6px; overflow: hidden; border: 0; border-radius: 6px; color: var(--event-text,#fff); background: var(--event-color); cursor: pointer; font-size: 11px; font-weight: 650; text-align: left; white-space: nowrap; text-overflow: ellipsis; }
 .event-chip:hover { filter: brightness(.94); transform: translateY(-1px); }
-.more-events { padding: 1px 5px; color: #515565; font-size: 10px; font-weight: 700; }
+.more-events { width: 100%; min-width: 0; height: 15px; padding: 0 5px; overflow: hidden; border: 0; border-radius: 4px; color: #515565; background: transparent; cursor: pointer; font-size: 10px; font-weight: 750; line-height: 15px; text-align: left; white-space: nowrap; text-overflow: ellipsis; }
+.more-events:hover { color: var(--indigo); background: var(--indigo-pale); }
 
 .search-view { height: 100%; overflow-y: auto; background: var(--surface-soft); }
 .search-header { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 13px; padding: 17px 30px; border-bottom: 1px solid var(--line); background: rgba(250,251,255,.96); backdrop-filter: blur(10px); }
@@ -191,6 +192,20 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .month-jump-modal > form { display: grid; gap: 20px; }
 .month-jump-modal input[type="month"] { font-size: 16px; }
 .month-jump-hint { margin: -8px 0 0; color: var(--ink-soft); font-size: 11px; }
+.day-events-modal { position: fixed; inset: auto; width: min(360px, calc(100vw - 24px)); max-height: min(520px, calc(100vh - 24px)); margin: 0; overflow: hidden; border-radius: 17px; }
+.day-events-panel { display: flex; flex-direction: column; min-height: 0; max-height: min(518px, calc(100vh - 26px)); padding: 20px; }
+.day-events-heading { flex: 0 0 auto; align-items: center; }
+.day-events-heading h2 { margin-top: 2px; font-size: 22px; }
+.day-events-list { min-height: 0; display: grid; gap: 3px; margin: 15px -6px 12px; padding: 0 6px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.day-agenda-item { width: 100%; min-width: 0; display: grid; grid-template-columns: 8px minmax(0,1fr) auto; align-items: center; gap: 10px; padding: 9px 8px; border: 0; border-radius: 10px; color: var(--ink); background: transparent; cursor: pointer; text-align: left; }
+.day-agenda-item:hover { background: var(--surface-hover); }
+.day-agenda-color { width: 8px; height: 28px; border-radius: 4px; background: var(--event-color); }
+.day-agenda-copy { min-width: 0; display: grid; gap: 3px; }
+.day-agenda-copy strong { overflow: hidden; font-size: 13px; white-space: nowrap; text-overflow: ellipsis; }
+.day-agenda-copy small { overflow: hidden; color: var(--ink-soft); font-size: 10px; white-space: nowrap; text-overflow: ellipsis; }
+.day-agenda-arrow { color: var(--ink-soft); font-size: 20px; }
+.day-add-event { flex: 0 0 auto; min-height: 39px; padding: 0 10px; border: 1px dashed var(--line); border-radius: 10px; color: var(--indigo); background: transparent; cursor: pointer; font-size: 12px; font-weight: 750; }
+.day-add-event:hover { border-color: var(--indigo); background: var(--indigo-pale); }
 .toast { position: fixed; z-index: 100; left: 50%; bottom: 26px; transform: translateX(-50%); padding: 11px 17px; border-radius: 999px; color: #fff; background: #202126; box-shadow: 0 10px 28px rgba(8,9,13,.3); font-size: 12px; font-weight: 700; }
 .mobile-only, .sidebar-backdrop, .mobile-fab { display: none; }
 
@@ -301,6 +316,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .calendar-create-form button { grid-column: 1 / -1; }
   .calendar-manage-row { grid-template-columns: 32px minmax(0,1fr) auto; }
   .calendar-manage-row button:last-child { grid-column: 2 / -1; }
+  .day-events-panel { padding: 18px 16px max(16px, env(safe-area-inset-bottom)); }
 }
 
 @media (max-width: 350px) {
