@@ -8,7 +8,7 @@
   <title>PP Calendar</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <script src="/static/theme.js?v=1"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=2">
+  <link rel="stylesheet" href="/static/styles.css?v=3">
 </head>
 <body>
   <div id="loginView" class="login-page" hidden>
@@ -39,7 +39,12 @@
           <button id="prevButton" class="icon-button" aria-label="上个月">‹</button>
           <button id="nextButton" class="icon-button" aria-label="下个月">›</button>
         </div>
-        <div><h1 id="monthTitle"></h1><p id="monthSubtitle">月视图 · 按天记录</p></div>
+        <div class="month-heading">
+          <button id="monthJumpButton" class="month-title-button" type="button" aria-label="选择年月">
+            <span id="monthTitle"></span><span class="month-title-caret" aria-hidden="true">⌄</span>
+          </button>
+          <p id="monthSubtitle">月视图 · 点击年月快速跳转</p>
+        </div>
       </div>
       <div class="topbar-actions">
         <button id="searchButton" class="icon-button" aria-label="搜索">⌕</button>
@@ -157,7 +162,23 @@
     <p id="calendarError" class="form-error" role="alert" hidden></p>
   </dialog>
 
+  <dialog id="monthJumpDialog" class="modal month-jump-modal">
+    <form id="monthJumpForm" method="dialog">
+      <div class="modal-heading">
+        <div><p class="eyebrow">GO TO MONTH</p><h2>跳转到年月</h2></div>
+        <button class="icon-button close-dialog" type="button" aria-label="关闭">×</button>
+      </div>
+      <label><span>选择年月</span><input id="monthJumpInput" type="month" required></label>
+      <p class="month-jump-hint">跳转后，地址栏会生成可复制的月份链接。</p>
+      <div class="modal-actions">
+        <span></span>
+        <button class="text-button close-dialog" type="button">取消</button>
+        <button class="primary-button compact" type="submit">跳转</button>
+      </div>
+    </form>
+  </dialog>
+
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <script src="/static/app.js?v=7" defer></script>
+  <script src="/static/app.js?v=8" defer></script>
 </body>
 </html>

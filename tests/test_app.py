@@ -22,6 +22,10 @@ def login(client):
 
 def test_authentication_and_security_headers(tmp_path):
     with make_client(tmp_path) as client:
+        month_page = client.get("/month/2023/5/1")
+        assert month_page.status_code == 200
+        assert "PP Calendar" in month_page.text
+        assert client.get("/month/2023/13/1").status_code == 404
         assert client.get("/api/session").json() == {"authenticated": False}
         denied = client.post("/api/login", json={"username": "PP", "password": "wrong"})
         assert denied.status_code == 401
@@ -95,4 +99,3 @@ def test_logout_invalidates_session(tmp_path):
         response = client.post("/api/logout", headers={"X-CSRF-Token": csrf})
         assert response.status_code == 200
         assert client.get("/api/calendars").status_code == 401
-

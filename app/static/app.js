@@ -1,12 +1,25 @@
 "use strict";
 
 const $ = (selector) => document.querySelector(selector);
+
+function monthFromPath(pathname = window.location.pathname) {
+  const match = pathname.match(/^\/month\/(\d{4})\/(\d{1,2})\/(\d{1,2})\/?$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const value = new Date(year, month - 1, day);
+  if (value.getFullYear() !== year || value.getMonth() !== month - 1 || value.getDate() !== day) return null;
+  return new Date(year, month - 1, 1);
+}
+
+const initialMonth = monthFromPath() || new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 const state = {
   csrf: "",
   calendars: [],
   events: [],
   visibleCalendars: new Set(),
-  cursor: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+  cursor: initialMonth,
   editingEvent: null,
   selectedEvent: null,
   searchTimer: null,
@@ -28,6 +41,7 @@ const els = {
   calendarError: $("#calendarError"), sidebar: $("#sidebar"), sidebarBackdrop: $("#sidebarBackdrop"),
   accountMenu: $("#accountMenu"), accountButton: $("#accountButton"), mobileAccountButton: $("#mobileAccountButton"),
   mobileMonthStrip: $("#mobileMonthStrip"), themeStatus: $("#themeStatus"), toast: $("#toast"),
+  monthJumpDialog: $("#monthJumpDialog"), monthJumpForm: $("#monthJumpForm"), monthJumpInput: $("#monthJumpInput"),
 };
 
 function isoDate(value) {
@@ -105,6 +119,7 @@ async function showApp(session) {
   els.loginView.hidden = true;
   els.appView.hidden = false;
   await loadCalendars();
+  syncMonthUrl("replace");
   await loadMonth();
 }
 
@@ -251,8 +266,7 @@ function renderMobileMonthStrip() {
     button.title = `${value.getFullYear()}年${value.getMonth() + 1}月`;
     button.setAttribute("aria-current", offset === 0 ? "date" : "false");
     button.addEventListener("click", () => {
-      state.cursor = value;
-      loadMonth().catch((error) => toast(error.message));
+      navigateToMonth(value).catch((error) => toast(error.message));
     });
     els.mobileMonthStrip.append(button);
   }
@@ -282,9 +296,31 @@ function renderMiniCalendar() {
   }
 }
 
+function monthPath(value = state.cursor) {
+  return `/month/${value.getFullYear()}/${value.getMonth() + 1}/1`;
+}
+
+function syncMonthUrl(mode = "push") {
+  const path = monthPath();
+  if (window.location.pathname === path) return;
+  window.history[mode === "replace" ? "replaceState" : "pushState"]({ month: path }, "", path);
+}
+
+async function navigateToMonth(value, historyMode = "push") {
+  state.cursor = new Date(value.getFullYear(), value.getMonth(), 1);
+  syncMonthUrl(historyMode);
+  await loadMonth();
+}
+
 function moveMonth(amount) {
-  state.cursor = new Date(state.cursor.getFullYear(), state.cursor.getMonth() + amount, 1);
-  loadMonth().catch((error) => toast(error.message));
+  const value = new Date(state.cursor.getFullYear(), state.cursor.getMonth() + amount, 1);
+  navigateToMonth(value).catch((error) => toast(error.message));
+}
+
+function openMonthJump() {
+  els.monthJumpInput.value = `${state.cursor.getFullYear()}-${String(state.cursor.getMonth() + 1).padStart(2, "0")}`;
+  els.monthJumpDialog.showModal();
+  els.monthJumpInput.focus();
 }
 
 function openEventEditor(event = null, targetDate = null) {
@@ -452,9 +488,17 @@ els.loginForm.addEventListener("submit", async (event) => {
     $("#loginPassword").value = ""; await showApp(session);
   } catch (error) { showError(els.loginError, error.message); }
 });
-$("#todayButton").addEventListener("click", () => { state.cursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1); loadMonth(); });
+$("#todayButton").addEventListener("click", () => navigateToMonth(new Date()).catch((error) => toast(error.message)));
 $("#prevButton").addEventListener("click", () => moveMonth(-1));
 $("#nextButton").addEventListener("click", () => moveMonth(1));
+$("#monthJumpButton").addEventListener("click", openMonthJump);
+els.monthJumpForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const match = els.monthJumpInput.value.match(/^(\d{4})-(\d{2})$/);
+  if (!match) return;
+  els.monthJumpDialog.close();
+  navigateToMonth(new Date(Number(match[1]), Number(match[2]) - 1, 1)).catch((error) => toast(error.message));
+});
 $("#newEventButton").addEventListener("click", () => openEventEditor());
 $("#sidebarCreate").addEventListener("click", () => { closeSidebar(); openEventEditor(); });
 els.eventForm.addEventListener("submit", saveEvent);
@@ -499,6 +543,12 @@ els.monthGrid.addEventListener("touchend", (event) => {
   if (Math.abs(difference) > 70) moveMonth(difference < 0 ? 1 : -1);
 }, { passive: true });
 window.addEventListener("resize", () => { if (!els.appView.hidden) renderMonth(); });
+window.addEventListener("popstate", () => {
+  const value = monthFromPath();
+  if (!value || els.appView.hidden) return;
+  state.cursor = value;
+  loadMonth().catch((error) => toast(error.message));
+});
 
 (async function bootstrap() {
   try {

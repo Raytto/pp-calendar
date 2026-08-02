@@ -66,8 +66,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .wordmark { margin-right: 18px; gap: 11px; }
 .wordmark strong { font-size: 20px; letter-spacing: -.4px; }
 .month-navigation { gap: 0; }
-.topbar h1 { margin: 0; font-size: 21px; font-weight: 650; letter-spacing: -.45px; white-space: nowrap; }
-.topbar h1 + p { margin: 2px 0 0; color: #858895; font-size: 10px; }
+.month-heading { min-width: 0; }
+.month-title-button { min-width: 0; display: flex; align-items: center; gap: 5px; margin: 0; padding: 3px 6px; border: 0; border-radius: 8px; color: var(--ink); background: transparent; cursor: pointer; white-space: nowrap; }
+.month-title-button:hover { color: var(--indigo); background: var(--indigo-pale); }
+.month-title-button #monthTitle { font-size: 21px; font-weight: 650; letter-spacing: -.45px; }
+.month-title-caret { color: var(--ink-soft); font-size: 12px; }
+.month-heading > p { margin: 0 0 0 6px; color: #858895; font-size: 10px; }
 .avatar-button { width: 38px; height: 38px; padding: 0; border: 2px solid #fff; border-radius: 50%; color: #fff; background: linear-gradient(145deg, #d89734, #354381); box-shadow: 0 0 0 1px #bbc0cf; cursor: pointer; font-size: 10px; font-weight: 850; }
 .mobile-account-button { display: none; }
 .mobile-month-strip { display: none; }
@@ -183,6 +187,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .calendar-create-form { display: grid; grid-template-columns: minmax(0,1fr) 54px auto; gap: 8px; padding-top: 17px; border-top: 1px solid var(--line); }
 .calendar-create-form input[type=color] { padding: 4px; }
 .calendar-modal .form-error { margin-top: 12px; }
+.month-jump-modal { width: min(410px, calc(100vw - 32px)); }
+.month-jump-modal > form { display: grid; gap: 20px; }
+.month-jump-modal input[type="month"] { font-size: 16px; }
+.month-jump-hint { margin: -8px 0 0; color: var(--ink-soft); font-size: 11px; }
 .toast { position: fixed; z-index: 100; left: 50%; bottom: 26px; transform: translateX(-50%); padding: 11px 17px; border-radius: 999px; color: #fff; background: #202126; box-shadow: 0 10px 28px rgba(8,9,13,.3); font-size: 12px; font-weight: 700; }
 .mobile-only, .sidebar-backdrop, .mobile-fab { display: none; }
 
@@ -205,7 +213,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 [data-theme="dark"] body,
 [data-theme="dark"] .app-shell { background: var(--canvas); }
 [data-theme="dark"] .topbar { border-color: #343640; background: rgba(31,32,37,.96); }
-[data-theme="dark"] .topbar h1 + p,
+[data-theme="dark"] .month-heading > p,
 [data-theme="dark"] .weekday-row span,
 [data-theme="dark"] .result-date span,
 [data-theme="dark"] .result-calendar,
@@ -243,7 +251,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .mobile-account-button { display: block; }
   .wordmark { margin-right: 2px; }
   .wordmark strong, .wordmark .brand-mark, #monthSubtitle, .topbar-actions .compact { display: none; }
-  .topbar h1 { font-size: 17px; }
+  .month-title-button #monthTitle { font-size: 17px; }
   .outline-button { min-height: 35px; padding: 0 12px; font-size: 12px; }
   .month-navigation .icon-button { width: 32px; height: 34px; }
   .mobile-month-strip { height: 54px; flex: 0 0 54px; display: flex; align-items: center; gap: 8px; padding: 7px 12px; overflow-x: auto; border-bottom: 1px solid var(--line); background: var(--surface); scrollbar-width: none; scroll-snap-type: x proximity; }
@@ -283,7 +291,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .topbar-actions { gap: 2px; }
   .topbar-actions .icon-button, .avatar-button { width: 34px; height: 34px; }
   .month-navigation { display: none; }
-  .topbar h1 { max-width: 94px; overflow: hidden; text-overflow: ellipsis; }
+  .month-title-button { max-width: 124px; }
+  .month-title-button #monthTitle { max-width: 104px; overflow: hidden; text-overflow: ellipsis; }
   .calendar-view { grid-template-rows: 28px minmax(0,1fr); }
   .event-chip { height: 19px; line-height: 19px; }
   .field-grid { grid-template-columns: 1fr; }
@@ -292,6 +301,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .calendar-create-form button { grid-column: 1 / -1; }
   .calendar-manage-row { grid-template-columns: 32px minmax(0,1fr) auto; }
   .calendar-manage-row button:last-child { grid-column: 2 / -1; }
+}
+
+@media (max-width: 350px) {
+  .month-title-button { max-width: 96px; }
+  .month-title-button #monthTitle { max-width: 77px; }
 }
 
 @media (max-height: 680px) and (max-width: 900px) {

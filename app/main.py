@@ -277,6 +277,15 @@ def index() -> FileResponse:
     return FileResponse(STATIC_ROOT / "index.html", headers={"Cache-Control": "no-cache"})
 
 
+@app.get("/month/{year}/{month}/{day}")
+def month_view(year: int, month: int, day: int) -> FileResponse:
+    try:
+        date(year, month, day)
+    except ValueError as error:
+        raise HTTPException(404, "日期路径无效") from error
+    return index()
+
+
 @app.get("/health")
 def health() -> dict:
     with db() as connection:
