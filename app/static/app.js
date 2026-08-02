@@ -26,7 +26,8 @@ const els = {
   detailCalendar: $("#detailCalendar"), detailNotes: $("#detailNotes"), calendarDialog: $("#calendarDialog"),
   calendarManageList: $("#calendarManageList"), calendarForm: $("#calendarForm"),
   calendarError: $("#calendarError"), sidebar: $("#sidebar"), sidebarBackdrop: $("#sidebarBackdrop"),
-  accountMenu: $("#accountMenu"), toast: $("#toast"),
+  accountMenu: $("#accountMenu"), accountButton: $("#accountButton"), mobileAccountButton: $("#mobileAccountButton"),
+  mobileMonthStrip: $("#mobileMonthStrip"), themeStatus: $("#themeStatus"), toast: $("#toast"),
 };
 
 function isoDate(value) {
@@ -54,6 +55,15 @@ function monthStartGrid(cursor) {
 
 function fullDateLabel(value) {
   return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "long", day: "numeric", weekday: "long" }).format(parseDate(value));
+}
+
+function readableTextColor(hex) {
+  const value = hex.replace("#", "");
+  const red = parseInt(value.slice(0, 2), 16);
+  const green = parseInt(value.slice(2, 4), 16);
+  const blue = parseInt(value.slice(4, 6), 16);
+  const luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255;
+  return luminance > 0.58 ? "#15161a" : "#ffffff";
 }
 
 async function api(path, options = {}) {
@@ -119,6 +129,7 @@ async function loadMonth() {
   state.events = payload.events;
   renderMonth();
   renderMiniCalendar();
+  renderMobileMonthStrip();
 }
 
 function renderCalendarFilters() {
@@ -192,11 +203,13 @@ function renderMonth() {
     const eventBox = document.createElement("div");
     eventBox.className = "day-events";
     const events = eventMap.get(key) || [];
-    const maxVisible = window.innerWidth <= 560 ? 2 : 4;
+    const mobileRowHeight = els.monthGrid.clientHeight ? els.monthGrid.clientHeight / 6 : 88;
+    const maxVisible = window.innerWidth <= 560 ? Math.max(2, Math.min(4, Math.floor((mobileRowHeight - 28) / 22))) : 4;
     events.slice(0, maxVisible).forEach((event) => {
       const chip = document.createElement("button");
       chip.className = "event-chip";
       chip.style.setProperty("--event-color", event.calendar_color);
+      chip.style.setProperty("--event-text", readableTextColor(event.calendar_color));
       chip.textContent = event.title;
       chip.title = event.title;
       chip.addEventListener("click", (clickEvent) => { clickEvent.stopPropagation(); openDetail(event); });
@@ -205,7 +218,8 @@ function renderMonth() {
     if (events.length > maxVisible) {
       const more = document.createElement("span");
       more.className = "more-events";
-      more.textContent = `另有 ${events.length - maxVisible} 项`;
+      more.textContent = window.innerWidth <= 560 ? "•••" : `另有 ${events.length - maxVisible} 项`;
+      more.title = `另有 ${events.length - maxVisible} 项`;
       eventBox.append(more);
     }
     cell.append(numberRow, eventBox);
@@ -215,6 +229,28 @@ function renderMonth() {
     });
     els.monthGrid.append(cell);
   }
+}
+
+function renderMobileMonthStrip() {
+  els.mobileMonthStrip.replaceChildren();
+  for (let offset = -3; offset <= 3; offset += 1) {
+    const value = new Date(state.cursor.getFullYear(), state.cursor.getMonth() + offset, 1);
+    const button = document.createElement("button");
+    button.className = "mobile-month-button" + (offset === 0 ? " active" : "");
+    button.type = "button";
+    button.textContent = `${value.getMonth() + 1}月`;
+    button.title = `${value.getFullYear()}年${value.getMonth() + 1}月`;
+    button.setAttribute("aria-current", offset === 0 ? "date" : "false");
+    button.addEventListener("click", () => {
+      state.cursor = value;
+      loadMonth().catch((error) => toast(error.message));
+    });
+    els.mobileMonthStrip.append(button);
+  }
+  requestAnimationFrame(() => {
+    const active = els.mobileMonthStrip.querySelector(".active");
+    if (active) els.mobileMonthStrip.scrollLeft = active.offsetLeft - (els.mobileMonthStrip.clientWidth - active.offsetWidth) / 2;
+  });
 }
 
 function renderMiniCalendar() {
@@ -380,6 +416,23 @@ async function search() {
 function closeSidebar() {
   els.sidebar.classList.remove("open");
   els.sidebarBackdrop.hidden = true;
+  toggleAccountMenu(false);
+}
+
+function toggleAccountMenu(force) {
+  const shouldOpen = typeof force === "boolean" ? force : els.accountMenu.hidden;
+  els.accountMenu.hidden = !shouldOpen;
+  els.accountButton.setAttribute("aria-expanded", String(shouldOpen));
+}
+
+function updateThemeControls(eventDetail) {
+  const mode = eventDetail?.mode || window.PPCalendarTheme?.getMode() || "system";
+  const resolved = eventDetail?.resolved || window.PPCalendarTheme?.resolvedMode(mode) || "light";
+  document.querySelectorAll("button[data-theme-mode]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.themeMode === mode));
+  });
+  const labels = { system: "跟随系统", light: "浅色模式", dark: "深色模式" };
+  els.themeStatus.textContent = mode === "system" ? `跟随系统 · 当前${resolved === "dark" ? "深色" : "浅色"}` : labels[mode];
 }
 
 document.querySelectorAll(".close-dialog").forEach((button) => button.addEventListener("click", () => button.closest("dialog").close()));
@@ -403,10 +456,24 @@ els.calendarForm.addEventListener("submit", createCalendar);
 $("#searchButton").addEventListener("click", openSearch);
 $("#closeSearch").addEventListener("click", closeSearch);
 els.searchInput.addEventListener("input", () => { clearTimeout(state.searchTimer); state.searchTimer = setTimeout(search, 220); });
-$("#accountButton").addEventListener("click", () => { els.accountMenu.hidden = !els.accountMenu.hidden; });
-$("#logoutButton").addEventListener("click", async () => { await api("/api/logout", { method: "POST" }); els.accountMenu.hidden = true; showLogin(); });
+els.accountButton.addEventListener("click", () => toggleAccountMenu());
+els.mobileAccountButton.addEventListener("click", () => {
+  els.sidebar.classList.add("open");
+  els.sidebarBackdrop.hidden = false;
+  toggleAccountMenu(true);
+});
+document.querySelectorAll("button[data-theme-mode]").forEach((button) => button.addEventListener("click", () => {
+  window.PPCalendarTheme?.setMode(button.dataset.themeMode);
+}));
+window.addEventListener("ppcalendar-themechange", (event) => updateThemeControls(event.detail));
+updateThemeControls();
+$("#logoutButton").addEventListener("click", async () => { await api("/api/logout", { method: "POST" }); toggleAccountMenu(false); closeSidebar(); showLogin(); });
 $("#menuButton").addEventListener("click", () => { els.sidebar.classList.add("open"); els.sidebarBackdrop.hidden = false; });
+$("#mobileFab").addEventListener("click", () => openEventEditor());
 els.sidebarBackdrop.addEventListener("click", closeSidebar);
+document.addEventListener("click", (event) => {
+  if (!els.accountMenu.hidden && !event.target.closest(".sidebar-account") && event.target !== els.mobileAccountButton) toggleAccountMenu(false);
+});
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !els.searchView.hidden && !document.querySelector("dialog[open]")) closeSearch();
   if (event.key === "/" && els.searchView.hidden && !document.querySelector("dialog[open]")) { event.preventDefault(); openSearch(); }

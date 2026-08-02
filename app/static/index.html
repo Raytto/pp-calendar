@@ -7,7 +7,8 @@
   <meta name="robots" content="noindex,nofollow,noarchive">
   <title>PP Calendar</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/static/styles.css?v=1">
+  <script src="/static/theme.js?v=1"></script>
+  <link rel="stylesheet" href="/static/styles.css?v=2">
 </head>
 <body>
   <div id="loginView" class="login-page" hidden>
@@ -43,13 +44,11 @@
       <div class="topbar-actions">
         <button id="searchButton" class="icon-button" aria-label="搜索">⌕</button>
         <button id="newEventButton" class="primary-button compact">＋ 新建</button>
-        <button id="accountButton" class="avatar-button" aria-label="账号菜单">PP</button>
-      </div>
-      <div id="accountMenu" class="account-menu" hidden>
-        <strong>PP</strong><span>私人日历</span>
-        <button id="logoutButton">退出登录</button>
+        <button id="mobileAccountButton" class="avatar-button mobile-account-button" aria-label="打开账号与外观设置">PP</button>
       </div>
     </header>
+
+    <nav id="mobileMonthStrip" class="mobile-month-strip" aria-label="选择月份"></nav>
 
     <div class="content-shell">
       <aside id="sidebar" class="sidebar">
@@ -65,12 +64,34 @@
         </section>
         <div class="sidebar-spacer"></div>
         <p class="sidebar-note">记录发生，也安排期待。</p>
+        <div class="sidebar-account">
+          <div id="accountMenu" class="account-settings" hidden>
+            <div class="appearance-setting">
+              <span>外观</span>
+              <div class="theme-options" role="group" aria-label="外观模式">
+                <button type="button" data-theme-mode="system"><b>◐</b><span>跟随系统</span></button>
+                <button type="button" data-theme-mode="light"><b>☀</b><span>浅色</span></button>
+                <button type="button" data-theme-mode="dark"><b>☾</b><span>深色</span></button>
+              </div>
+              <small id="themeStatus">当前跟随系统</small>
+            </div>
+            <button id="logoutButton" class="account-logout" type="button">退出登录</button>
+          </div>
+          <button id="accountButton" class="account-profile" type="button" aria-label="账号与外观设置" aria-expanded="false">
+            <span class="sidebar-avatar">PP</span>
+            <span class="account-copy"><strong>PP</strong><small>私人日历</small></span>
+            <span class="account-chevron" aria-hidden="true">⌃</span>
+          </button>
+        </div>
       </aside>
       <button id="sidebarBackdrop" class="sidebar-backdrop" aria-label="关闭菜单" hidden></button>
 
       <main class="workspace">
         <section id="calendarView" class="calendar-view">
-          <div class="weekday-row"><span>周一</span><span>周二</span><span>周三</span><span>周四</span><span>周五</span><span>周六</span><span>周日</span></div>
+          <div class="weekday-row">
+            <span><i>周一</i><b>一</b></span><span><i>周二</i><b>二</b></span><span><i>周三</i><b>三</b></span>
+            <span><i>周四</i><b>四</b></span><span><i>周五</i><b>五</b></span><span><i>周六</i><b>六</b></span><span><i>周日</i><b>日</b></span>
+          </div>
           <div id="monthGrid" class="month-grid" aria-label="月历"></div>
         </section>
         <section id="searchView" class="search-view" hidden>
@@ -83,6 +104,7 @@
         </section>
       </main>
     </div>
+    <button id="mobileFab" class="mobile-fab" aria-label="新建事件">＋</button>
   </div>
 
   <dialog id="eventDialog" class="modal event-modal">
@@ -136,6 +158,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <script src="/static/app.js?v=5" defer></script>
+  <script src="/static/app.js?v=6" defer></script>
 </body>
 </html>
