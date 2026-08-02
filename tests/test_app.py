@@ -37,6 +37,20 @@ def test_authentication_and_security_headers(tmp_path):
         assert "frame-ancestors 'none'" in session.headers["content-security-policy"]
 
 
+def test_mobile_month_view_uses_compact_event_rows_without_shortcut_strip(tmp_path):
+    with make_client(tmp_path) as client:
+        month_page = client.get("/month/2026/7/1")
+        styles = client.get("/static/styles.css")
+        script = client.get("/static/app.js")
+
+        assert month_page.status_code == 200
+        assert "mobileMonthStrip" not in month_page.text
+        assert "mobile-month-strip" not in styles.text
+        assert "--event-chip-height: 16px" in styles.text
+        assert "--event-row-gap: 1px" in styles.text
+        assert "renderMobileMonthStrip" not in script.text
+
+
 def test_calendar_and_event_crud_search(tmp_path):
     with make_client(tmp_path) as client:
         csrf = login(client)

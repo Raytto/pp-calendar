@@ -61,7 +61,7 @@ const els = {
   calendarManageList: $("#calendarManageList"), calendarForm: $("#calendarForm"),
   calendarError: $("#calendarError"), sidebar: $("#sidebar"), sidebarBackdrop: $("#sidebarBackdrop"),
   accountMenu: $("#accountMenu"), accountButton: $("#accountButton"), mobileAccountButton: $("#mobileAccountButton"),
-  mobileMonthStrip: $("#mobileMonthStrip"), themeStatus: $("#themeStatus"), toast: $("#toast"),
+  themeStatus: $("#themeStatus"), toast: $("#toast"),
   monthJumpDialog: $("#monthJumpDialog"), monthJumpForm: $("#monthJumpForm"), monthJumpInput: $("#monthJumpInput"),
   dayEventsDialog: $("#dayEventsDialog"), dayEventsTitle: $("#dayEventsTitle"), dayEventsWeekday: $("#dayEventsWeekday"),
   dayEventsList: $("#dayEventsList"), dayAddEventButton: $("#dayAddEventButton"),
@@ -146,13 +146,17 @@ function readableTextColor(hex) {
 }
 
 function visibleEventCapacity(eventCount) {
-  const mobile = window.innerWidth <= 560;
-  const rowHeight = els.monthGrid.clientHeight ? els.monthGrid.clientHeight / 6 : (mobile ? 112 : 132);
-  const cellPaddingAndHeader = mobile ? 29 : 35;
-  const chipHeight = mobile ? 20 : 21;
-  const gap = 3;
+  const styles = getComputedStyle(els.monthGrid);
+  const numberValue = (name, fallback) => {
+    const parsed = Number.parseFloat(styles.getPropertyValue(name));
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+  const rowHeight = els.monthGrid.clientHeight ? els.monthGrid.clientHeight / 6 : 132;
+  const cellPaddingAndHeader = numberValue("--cell-header-space", 35);
+  const chipHeight = numberValue("--event-chip-height", 21);
+  const gap = numberValue("--event-row-gap", 3);
   const chipStep = chipHeight + gap;
-  const moreHeight = mobile ? 19 : 20;
+  const moreHeight = numberValue("--more-events-height", 20);
   const availableHeight = Math.max(0, rowHeight - cellPaddingAndHeader);
   const withoutOverflow = Math.max(1, Math.floor((availableHeight + gap) / chipStep));
   if (eventCount <= withoutOverflow) return eventCount;
@@ -248,7 +252,6 @@ function renderMonthData(events) {
   state.renderedMonthKey = monthKey(state.cursor);
   renderMonth();
   renderMiniCalendar();
-  renderMobileMonthStrip();
 }
 
 function pruneMonthWindow(center) {
@@ -578,27 +581,6 @@ function renderMonth() {
     });
     els.monthGrid.append(cell);
   }
-}
-
-function renderMobileMonthStrip() {
-  els.mobileMonthStrip.replaceChildren();
-  for (let offset = -3; offset <= 3; offset += 1) {
-    const value = new Date(state.cursor.getFullYear(), state.cursor.getMonth() + offset, 1);
-    const button = document.createElement("button");
-    button.className = "mobile-month-button" + (offset === 0 ? " active" : "");
-    button.type = "button";
-    button.textContent = `${value.getMonth() + 1}月`;
-    button.title = `${value.getFullYear()}年${value.getMonth() + 1}月`;
-    button.setAttribute("aria-current", offset === 0 ? "date" : "false");
-    button.addEventListener("click", () => {
-      navigateToMonth(value).catch((error) => toast(error.message));
-    });
-    els.mobileMonthStrip.append(button);
-  }
-  requestAnimationFrame(() => {
-    const active = els.mobileMonthStrip.querySelector(".active");
-    if (active) els.mobileMonthStrip.scrollLeft = active.offsetLeft - (els.mobileMonthStrip.clientWidth - active.offsetWidth) / 2;
-  });
 }
 
 function renderMiniCalendar() {
