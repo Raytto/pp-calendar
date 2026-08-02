@@ -97,8 +97,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .filter-row { color: #dfe1eb; }
 .filter-row:hover { color: #fff; background: rgba(255,255,255,.065); }
 .filter-row input { position: absolute; opacity: 0; }
-.filter-check { width: 17px; height: 17px; display: grid; place-items: center; border: 2px solid var(--calendar-color); border-radius: 4px; color: transparent; background: transparent; font-size: 11px; font-weight: 900; }
-.filter-row input:checked + .filter-check { color: #fff; background: var(--calendar-color); }
+.filter-check { position: relative; width: 17px; height: 17px; flex: 0 0 17px; border: 2px solid var(--calendar-color); border-radius: 4px; background: transparent; font-size: 0; transition: background-color .12s ease, border-color .12s ease, transform .12s ease; }
+.filter-check::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 8px; border: solid #fff; border-width: 0 1.8px 1.8px 0; opacity: 0; transform: translate(-50%,-61%) rotate(45deg) scale(.7); transform-origin: center; transition: opacity .1s ease, transform .12s ease; }
+.filter-row input:checked + .filter-check { background: var(--calendar-color); }
+.filter-row input:checked + .filter-check::after { opacity: 1; transform: translate(-50%,-61%) rotate(45deg) scale(1); }
+.filter-row input:active + .filter-check { transform: scale(.9); }
+.filter-row input:focus-visible + .filter-check { outline: 2px solid rgba(255,255,255,.78); outline-offset: 2px; }
 .sidebar-spacer { flex: 1; }
 .sidebar-note { margin: 0; padding: 12px 4px; color: #74798d; font-size: 10px; }
 .sidebar-account { position: relative; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.1); }

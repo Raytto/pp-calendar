@@ -187,7 +187,7 @@ function renderCalendarFilters() {
     });
     const check = document.createElement("span");
     check.className = "filter-check";
-    check.textContent = "✓";
+    check.setAttribute("aria-hidden", "true");
     const name = document.createElement("span");
     name.textContent = calendar.name;
     label.append(input, check, name);
