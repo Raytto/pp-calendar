@@ -205,6 +205,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .modal-heading { display: flex; align-items: start; justify-content: space-between; gap: 18px; }
 .modal h2 { margin: 0; font-size: 23px; letter-spacing: -.5px; }
 .event-modal form { display: grid; gap: 18px; }
+.event-modal form[aria-busy="true"] { cursor: progress; }
+.event-modal form[aria-busy="true"] button:disabled { cursor: progress; opacity: .58; }
 .title-field input { min-height: 52px; border-width: 0 0 2px; border-radius: 0; font-size: 20px; }
 .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .calendar-select-field { position: relative; min-width: 0; }

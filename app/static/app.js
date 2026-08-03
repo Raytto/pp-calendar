@@ -41,6 +41,8 @@ const state = {
   monthCache: new Map(),
   monthInflight: new Map(),
   renderedMonthKey: null,
+  eventCreateRequestId: null,
+  eventSaveInFlight: false,
   selectedDayDate: null,
   optionsCalendarId: null,
 };
@@ -55,7 +57,8 @@ const els = {
   eventDate: $("#eventDate"), eventCalendar: $("#eventCalendar"), eventNotes: $("#eventNotes"),
   eventCalendarButton: $("#eventCalendarButton"), eventCalendarName: $("#eventCalendarName"),
   eventCalendarColor: $("#eventCalendarColor"), eventCalendarMenu: $("#eventCalendarMenu"),
-  eventError: $("#eventError"), deleteEventButton: $("#deleteEventButton"), detailDialog: $("#detailDialog"),
+  eventError: $("#eventError"), deleteEventButton: $("#deleteEventButton"), eventSaveButton: $("#eventSaveButton"),
+  eventCancelButton: $("#eventCancelButton"), eventCloseButton: $("#eventCloseButton"), detailDialog: $("#detailDialog"),
   detailColor: $("#detailColor"), detailTitle: $("#detailTitle"), detailDate: $("#detailDate"),
   detailCalendar: $("#detailCalendar"), detailNotes: $("#detailNotes"), calendarDialog: $("#calendarDialog"),
   calendarManageList: $("#calendarManageList"), calendarForm: $("#calendarForm"),
@@ -143,6 +146,21 @@ function readableTextColor(hex) {
   const blue = parseInt(value.slice(4, 6), 16);
   const luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255;
   return luminance > 0.58 ? "#15161a" : "#ffffff";
+}
+
+function newCreateRequestId() {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+function setEventFormSaving(saving) {
+  state.eventSaveInFlight = saving;
+  els.eventForm.setAttribute("aria-busy", String(saving));
+  els.eventForm.querySelectorAll("button, input, textarea, select").forEach((control) => {
+    control.disabled = saving;
+  });
+  els.eventSaveButton.textContent = saving ? "保存中…" : "保存";
 }
 
 function visibleEventCapacity(eventCount) {
@@ -632,6 +650,8 @@ function openMonthJump() {
 
 function openEventEditor(event = null, targetDate = null) {
   state.editingEvent = event;
+  state.eventCreateRequestId = event ? null : newCreateRequestId();
+  setEventFormSaving(false);
   els.eventDialogTitle.textContent = event ? "编辑事件" : "新建事件";
   els.eventTitle.value = event?.title || "";
   els.eventDate.value = event?.event_date || targetDate || isoDate(new Date());
@@ -701,19 +721,28 @@ function openDayEvents(eventDate, events, anchor) {
 
 async function saveEvent(event) {
   event.preventDefault();
+  if (state.eventSaveInFlight) return;
+  setEventFormSaving(true);
+  showError(els.eventError);
   const payload = {
     title: els.eventTitle.value.trim(), event_date: els.eventDate.value,
     calendar_id: Number(els.eventCalendar.value), notes: els.eventNotes.value.trim(),
   };
-  const editing = Boolean(state.editingEvent);
+  const editingEvent = state.editingEvent;
+  const editing = Boolean(editingEvent);
+  const createRequestId = state.eventCreateRequestId || newCreateRequestId();
+  if (!editing) state.eventCreateRequestId = createRequestId;
   let savedEvent;
   try {
     const result = editing
-      ? await api(`/api/events/${state.editingEvent.id}`, { method: "PATCH", body: payload })
-      : await api("/api/events", { method: "POST", body: payload });
+      ? await api(`/api/events/${editingEvent.id}`, { method: "PATCH", body: payload })
+      : await api("/api/events", {
+        method: "POST", body: payload, headers: { "Idempotency-Key": createRequestId },
+      });
     savedEvent = result.event;
   } catch (error) {
     showError(els.eventError, error.message);
+    setEventFormSaving(false);
     return;
   }
   showSavedEvent(savedEvent);
@@ -1034,6 +1063,10 @@ els.eventCalendarMenu.addEventListener("keydown", (event) => {
 });
 els.eventDialog.addEventListener("close", () => toggleEventCalendarMenu(false));
 els.eventDialog.addEventListener("cancel", (event) => {
+  if (state.eventSaveInFlight) {
+    event.preventDefault();
+    return;
+  }
   if (els.eventCalendarMenu.hidden) return;
   event.preventDefault();
   toggleEventCalendarMenu(false);

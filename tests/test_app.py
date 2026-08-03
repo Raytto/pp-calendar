@@ -52,6 +52,8 @@ def test_mobile_month_view_uses_compact_event_rows_without_shortcut_strip(tmp_pa
         assert "touch-action: pan-y pinch-zoom" in styles.text
         assert "renderMobileMonthStrip" not in script.text
         assert "event.touches.length !== 1" in script.text
+        assert "if (state.eventSaveInFlight) return" in script.text
+        assert '"Idempotency-Key": createRequestId' in script.text
 
 
 def test_calendar_and_event_crud_search(tmp_path):
@@ -68,11 +70,19 @@ def test_calendar_and_event_crud_search(tmp_path):
         calendar_id = created_calendar.json()["calendar"]["id"]
 
         created_event = client.post(
-            "/api/events", headers=headers,
+            "/api/events", headers={**headers, "Idempotency-Key": "test-create-learning-fastapi"},
             json={"title": "学习 FastAPI", "event_date": "2026-08-03", "calendar_id": calendar_id, "notes": "搜索测试关键词"},
         )
         assert created_event.status_code == 201
         event_id = created_event.json()["event"]["id"]
+        replayed_event = client.post(
+            "/api/events", headers={**headers, "Idempotency-Key": "test-create-learning-fastapi"},
+            json={"title": "这条重复提交应被忽略", "event_date": "2026-08-05", "calendar_id": calendar_id},
+        )
+        assert replayed_event.status_code == 201
+        assert replayed_event.json()["event"]["id"] == event_id
+        assert replayed_event.json()["event"]["title"] == "学习 FastAPI"
+        assert replayed_event.json()["idempotent_replay"] is True
 
         ranged = client.get("/api/events?start=2026-08-01&end=2026-08-31").json()["events"]
         assert [item["id"] for item in ranged] == [event_id]

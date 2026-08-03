@@ -32,6 +32,7 @@ LOGIN_ATTEMPT_LIMIT = 10
 MAX_LOGIN_CLIENTS = 4096
 COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+IDEMPOTENCY_KEY_RE = re.compile(r"^[A-Za-z0-9._:-]{16,128}$")
 CALENDAR_COLORS = (
     "#AD1457", "#F4511E", "#E4C441", "#0B8043", "#3F51B5", "#8E24AA",
     "#D81B60", "#EF6C00", "#C0CA33", "#009688", "#7986CB", "#795548",
@@ -159,6 +160,13 @@ def initialize_database() -> None:
                 created_at TEXT NOT NULL
             );
             """
+        )
+        event_columns = {row["name"] for row in connection.execute("PRAGMA table_info(events)").fetchall()}
+        if "create_request_id" not in event_columns:
+            connection.execute("ALTER TABLE events ADD COLUMN create_request_id TEXT")
+        connection.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS events_create_request_idx "
+            "ON events(create_request_id) WHERE create_request_id IS NOT NULL"
         )
         existing = connection.execute("SELECT COUNT(*) AS total FROM calendars").fetchone()["total"]
         if existing == 0:
@@ -560,17 +568,41 @@ def ensure_calendar(connection: sqlite3.Connection, calendar_id: int) -> None:
 
 
 @app.post("/api/events", status_code=201)
-def create_event(payload: EventInput, _session: Annotated[sqlite3.Row, Depends(csrf_session)]) -> dict:
+def create_event(
+    payload: EventInput,
+    _session: Annotated[sqlite3.Row, Depends(csrf_session)],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+) -> dict:
+    request_id = idempotency_key.strip() if idempotency_key else None
+    if request_id and not IDEMPOTENCY_KEY_RE.fullmatch(request_id):
+        raise HTTPException(400, "幂等键格式无效")
     created = now_iso()
     with write_lock, db() as connection:
+        if request_id:
+            existing = connection.execute(
+                EVENT_JOIN + " WHERE e.create_request_id=?", (request_id,)
+            ).fetchone()
+            if existing:
+                return {"event": event_view(existing), "idempotent_replay": True}
         ensure_calendar(connection, payload.calendar_id)
-        cursor = connection.execute(
-            "INSERT INTO events(title,event_date,calendar_id,notes,created_at,updated_at) VALUES(?,?,?,?,?,?)",
-            (payload.title, payload.event_date, payload.calendar_id, payload.notes, created, created),
-        )
+        try:
+            cursor = connection.execute(
+                "INSERT INTO events(title,event_date,calendar_id,notes,created_at,updated_at,create_request_id) "
+                "VALUES(?,?,?,?,?,?,?)",
+                (payload.title, payload.event_date, payload.calendar_id, payload.notes, created, created, request_id),
+            )
+        except sqlite3.IntegrityError:
+            connection.rollback()
+            if request_id:
+                existing = connection.execute(
+                    EVENT_JOIN + " WHERE e.create_request_id=?", (request_id,)
+                ).fetchone()
+                if existing:
+                    return {"event": event_view(existing), "idempotent_replay": True}
+            raise
         connection.commit()
         row = connection.execute(EVENT_JOIN + " WHERE e.id=?", (cursor.lastrowid,)).fetchone()
-    return {"event": event_view(row)}
+    return {"event": event_view(row), "idempotent_replay": False}
 
 
 @app.patch("/api/events/{event_id}")
