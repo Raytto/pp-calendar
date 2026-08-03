@@ -49,7 +49,9 @@ def test_mobile_month_view_uses_compact_event_rows_without_shortcut_strip(tmp_pa
         assert "--cell-header-space: 20px" in styles.text
         assert "--event-chip-height: 14px" in styles.text
         assert "--event-row-gap: 1px" in styles.text
+        assert "touch-action: pan-y pinch-zoom" in styles.text
         assert "renderMobileMonthStrip" not in script.text
+        assert "event.touches.length !== 1" in script.text
 
 
 def test_calendar_and_event_crud_search(tmp_path):

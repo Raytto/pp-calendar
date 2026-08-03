@@ -160,7 +160,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .weekday-row span { display: grid; place-items: center; color: #676b77; font-size: 11px; }
 .weekday-row i { font-style: normal; }
 .weekday-row b { display: none; font-weight: 500; }
-.month-grid { --cell-header-space: 35px; --event-chip-height: 21px; --event-row-gap: 3px; --more-events-height: 20px; min-height: 0; display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); grid-template-rows: repeat(6,minmax(0,1fr)); touch-action: pan-y; }
+.month-grid { --cell-header-space: 35px; --event-chip-height: 21px; --event-row-gap: 3px; --more-events-height: 20px; min-height: 0; display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); grid-template-rows: repeat(6,minmax(0,1fr)); touch-action: pan-y pinch-zoom; }
 .day-cell { min-width: 0; min-height: 0; padding: 6px 5px 4px; overflow: hidden; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--surface); cursor: pointer; }
 .day-cell:nth-child(7n) { border-right: 0; }
 .day-cell:hover { background: var(--surface-hover); }

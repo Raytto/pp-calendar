@@ -1084,12 +1084,46 @@ document.addEventListener("keydown", (event) => {
 });
 
 let touchStartX = null;
-els.monthGrid.addEventListener("touchstart", (event) => { touchStartX = event.changedTouches[0].clientX; }, { passive: true });
+let touchStartY = null;
+let touchWasMultiPointer = false;
+els.monthGrid.addEventListener("touchstart", (event) => {
+  if (event.touches.length !== 1) {
+    touchStartX = null;
+    touchStartY = null;
+    touchWasMultiPointer = true;
+    return;
+  }
+  touchWasMultiPointer = false;
+  touchStartX = event.touches[0].clientX;
+  touchStartY = event.touches[0].clientY;
+}, { passive: true });
+els.monthGrid.addEventListener("touchmove", (event) => {
+  if (event.touches.length !== 1) {
+    touchStartX = null;
+    touchStartY = null;
+    touchWasMultiPointer = true;
+  }
+}, { passive: true });
 els.monthGrid.addEventListener("touchend", (event) => {
-  if (touchStartX === null) return;
-  const difference = event.changedTouches[0].clientX - touchStartX;
+  if (event.touches.length > 0) return;
+  if (touchWasMultiPointer || touchStartX === null || touchStartY === null) {
+    touchWasMultiPointer = false;
+    touchStartX = null;
+    touchStartY = null;
+    return;
+  }
+  const differenceX = event.changedTouches[0].clientX - touchStartX;
+  const differenceY = event.changedTouches[0].clientY - touchStartY;
   touchStartX = null;
-  if (Math.abs(difference) > 70) moveMonth(difference < 0 ? 1 : -1);
+  touchStartY = null;
+  if (Math.abs(differenceX) > 70 && Math.abs(differenceX) > Math.abs(differenceY) * 1.25) {
+    moveMonth(differenceX < 0 ? 1 : -1);
+  }
+}, { passive: true });
+els.monthGrid.addEventListener("touchcancel", () => {
+  touchStartX = null;
+  touchStartY = null;
+  touchWasMultiPointer = false;
 }, { passive: true });
 let resizeRenderFrame;
 function scheduleMonthRender() {
