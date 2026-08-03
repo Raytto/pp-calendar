@@ -56,6 +56,24 @@ def test_mobile_month_view_uses_compact_event_rows_without_shortcut_strip(tmp_pa
         assert '"Idempotency-Key": createRequestId' in script.text
 
 
+def test_month_events_expose_drag_rescheduling_and_directional_page_motion(tmp_path):
+    with make_client(tmp_path) as client:
+        month_page = client.get("/month/2026/8/1")
+        styles = client.get("/static/styles.css")
+        script = client.get("/static/app.js")
+
+        assert "/static/styles.css?v=16" in month_page.text
+        assert "/static/app.js?v=25" in month_page.text
+        assert 'chip.addEventListener("pointerdown", beginEventDrag)' in script.text
+        assert 'body: { event_date: targetDate }' in script.text
+        assert "EVENT_DRAG_EDGE_HOLD_MS" in script.text
+        assert 'navigateToMonth(monthCursor(state.cursor, direction))' in script.text
+        assert "month-enter-next" in styles.text
+        assert "month-page-enter-previous" in styles.text
+        assert "prefers-reduced-motion: reduce" in styles.text
+        assert "animation: none !important" in styles.text
+
+
 def test_calendar_and_event_crud_search(tmp_path):
     with make_client(tmp_path) as client:
         csrf = login(client)

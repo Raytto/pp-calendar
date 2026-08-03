@@ -12,6 +12,9 @@ const SIDEBAR_WIDTH_DEFAULT = 280;
 const SIDEBAR_WIDTH_MIN = 220;
 const SIDEBAR_WIDTH_MAX = 520;
 const MONTH_CACHE_TTL_MS = 60_000;
+const EVENT_DRAG_START_DISTANCE = 5;
+const EVENT_DRAG_EDGE_HOLD_MS = 520;
+const EVENT_DRAG_EDGE_MAX_WIDTH = 64;
 
 function monthFromPath(pathname = window.location.pathname) {
   const match = pathname.match(/^\/month\/(\d{4})\/(\d{1,2})\/(\d{1,2})\/?$/);
@@ -45,6 +48,7 @@ const state = {
   eventSaveInFlight: false,
   selectedDayDate: null,
   optionsCalendarId: null,
+  monthAnimationDirection: 0,
 };
 
 const els = {
@@ -265,11 +269,12 @@ async function loadCalendars() {
   renderEventCalendarOptions();
 }
 
-function renderMonthData(events) {
+function renderMonthData(events, { animate = true } = {}) {
   state.events = events;
   state.renderedMonthKey = monthKey(state.cursor);
   renderMonth();
   renderMiniCalendar();
+  if (animate) playPendingMonthAnimation();
 }
 
 function pruneMonthWindow(center) {
@@ -329,7 +334,7 @@ async function loadMonth({ force = false } = {}) {
   pruneMonthWindow(cursor);
   const cached = state.monthCache.get(key);
   if (cached) renderMonthData(cached.events);
-  else if (state.renderedMonthKey !== key) renderMonthData([]);
+  else if (state.renderedMonthKey !== key) renderMonthData([], { animate: false });
   try {
     const events = await requestMonth(cursor, force);
     if (requestId !== state.monthRequestId || key !== monthKey(state.cursor)) return;
@@ -530,6 +535,199 @@ function toggleEventCalendarMenu(force) {
   });
 }
 
+let monthAnimationTimer;
+function playPendingMonthAnimation() {
+  const direction = state.monthAnimationDirection;
+  if (!direction) return;
+  state.monthAnimationDirection = 0;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const animationClass = direction > 0 ? "month-enter-next" : "month-enter-previous";
+  const monthButton = $("#monthJumpButton");
+  clearTimeout(monthAnimationTimer);
+  els.calendarView.classList.remove("month-enter-next", "month-enter-previous");
+  monthButton.classList.remove("month-enter-next", "month-enter-previous");
+  void els.calendarView.offsetWidth;
+  els.calendarView.classList.add(animationClass);
+  monthButton.classList.add(animationClass);
+  monthAnimationTimer = setTimeout(() => {
+    els.calendarView.classList.remove(animationClass);
+    monthButton.classList.remove(animationClass);
+  }, 210);
+}
+
+const movingEventIds = new Set();
+let eventDrag = null;
+let suppressCalendarClickUntil = 0;
+
+function shouldSuppressCalendarClick() {
+  return performance.now() < suppressCalendarClickUntil;
+}
+
+function beginEventDrag(pointerEvent) {
+  if (!pointerEvent.isPrimary || pointerEvent.pointerType !== "mouse" || pointerEvent.button !== 0 || eventDrag) return;
+  const eventId = Number(pointerEvent.currentTarget.dataset.eventId);
+  const calendarEvent = state.events.find((item) => item.id === eventId);
+  if (!calendarEvent || movingEventIds.has(eventId)) return;
+  const sourceRect = pointerEvent.currentTarget.getBoundingClientRect();
+  eventDrag = {
+    pointerId: pointerEvent.pointerId,
+    calendarEvent,
+    source: pointerEvent.currentTarget,
+    sourceRect,
+    offsetX: pointerEvent.clientX - sourceRect.left,
+    offsetY: pointerEvent.clientY - sourceRect.top,
+    startX: pointerEvent.clientX,
+    startY: pointerEvent.clientY,
+    clientX: pointerEvent.clientX,
+    clientY: pointerEvent.clientY,
+    started: false,
+    ghost: null,
+    targetCell: null,
+    targetDate: null,
+    edgeDirection: 0,
+    edgeLatched: 0,
+    edgeTimer: null,
+    edgeBusy: false,
+  };
+}
+
+function startEventDrag() {
+  if (!eventDrag || eventDrag.started) return;
+  eventDrag.started = true;
+  suppressCalendarClickUntil = performance.now() + 600;
+  try { els.monthGrid.setPointerCapture(eventDrag.pointerId); }
+  catch (_error) { /* Pointer capture is an enhancement; in-grid dragging still works. */ }
+  eventDrag.source.classList.add("drag-source");
+  document.documentElement.classList.add("event-dragging");
+  const ghost = document.createElement("div");
+  ghost.className = "event-drag-ghost";
+  ghost.textContent = eventDrag.calendarEvent.title;
+  ghost.style.width = `${eventDrag.sourceRect.width}px`;
+  ghost.style.setProperty("--event-color", eventDrag.calendarEvent.calendar_color);
+  ghost.style.setProperty("--event-text", readableTextColor(eventDrag.calendarEvent.calendar_color));
+  document.body.append(ghost);
+  eventDrag.ghost = ghost;
+}
+
+function setEventDragTarget(cell) {
+  if (!eventDrag || eventDrag.targetCell === cell) return;
+  eventDrag.targetCell?.classList.remove("drag-target");
+  eventDrag.targetCell = cell;
+  eventDrag.targetDate = cell?.dataset.date || null;
+  cell?.classList.add("drag-target");
+}
+
+function setEventDragEdge(direction) {
+  if (!eventDrag || eventDrag.edgeDirection === direction) return;
+  clearTimeout(eventDrag.edgeTimer);
+  eventDrag.edgeTimer = null;
+  eventDrag.edgeDirection = direction;
+  els.calendarView.classList.toggle("event-drag-edge-left", direction < 0);
+  els.calendarView.classList.toggle("event-drag-edge-right", direction > 0);
+  if (!direction) {
+    eventDrag.edgeLatched = 0;
+    return;
+  }
+  if (eventDrag.edgeLatched === direction || eventDrag.edgeBusy) return;
+  const activeDrag = eventDrag;
+  activeDrag.edgeTimer = setTimeout(() => {
+    if (eventDrag !== activeDrag || activeDrag.edgeDirection !== direction || activeDrag.edgeBusy) return;
+    activeDrag.edgeLatched = direction;
+    flipMonthDuringEventDrag(direction, activeDrag);
+  }, EVENT_DRAG_EDGE_HOLD_MS);
+}
+
+function updateEventDragPosition(clientX, clientY) {
+  if (!eventDrag?.started) return;
+  eventDrag.clientX = clientX;
+  eventDrag.clientY = clientY;
+  eventDrag.ghost.style.transform = `translate3d(${clientX - eventDrag.offsetX}px, ${clientY - eventDrag.offsetY}px, 0)`;
+  const hit = document.elementFromPoint(clientX, clientY);
+  const cell = hit?.closest?.(".day-cell");
+  setEventDragTarget(cell && els.monthGrid.contains(cell) ? cell : null);
+
+  const rect = els.monthGrid.getBoundingClientRect();
+  const edgeWidth = Math.min(EVENT_DRAG_EDGE_MAX_WIDTH, Math.max(38, rect.width * 0.065));
+  const direction = clientX <= rect.left + edgeWidth ? -1 : clientX >= rect.right - edgeWidth ? 1 : 0;
+  setEventDragEdge(direction);
+}
+
+async function flipMonthDuringEventDrag(direction, activeDrag) {
+  if (eventDrag !== activeDrag) return;
+  activeDrag.edgeBusy = true;
+  setEventDragTarget(null);
+  const navigation = navigateToMonth(monthCursor(state.cursor, direction));
+  requestAnimationFrame(() => {
+    if (eventDrag === activeDrag) updateEventDragPosition(activeDrag.clientX, activeDrag.clientY);
+  });
+  try { await navigation; }
+  catch (error) { toast(error.message); }
+  finally {
+    if (eventDrag === activeDrag) {
+      activeDrag.edgeBusy = false;
+      updateEventDragPosition(activeDrag.clientX, activeDrag.clientY);
+    }
+  }
+}
+
+function moveEventDrag(pointerEvent) {
+  if (!eventDrag || pointerEvent.pointerId !== eventDrag.pointerId) return;
+  const distance = Math.hypot(pointerEvent.clientX - eventDrag.startX, pointerEvent.clientY - eventDrag.startY);
+  if (!eventDrag.started && distance < EVENT_DRAG_START_DISTANCE) return;
+  pointerEvent.preventDefault();
+  startEventDrag();
+  updateEventDragPosition(pointerEvent.clientX, pointerEvent.clientY);
+}
+
+function clearEventDrag(activeDrag) {
+  clearTimeout(activeDrag.edgeTimer);
+  activeDrag.targetCell?.classList.remove("drag-target");
+  activeDrag.source.classList.remove("drag-source");
+  activeDrag.ghost?.remove();
+  document.documentElement.classList.remove("event-dragging");
+  els.calendarView.classList.remove("event-drag-edge-left", "event-drag-edge-right");
+  if (els.monthGrid.hasPointerCapture?.(activeDrag.pointerId)) els.monthGrid.releasePointerCapture(activeDrag.pointerId);
+}
+
+function finishEventDrag(pointerEvent, cancelled = false) {
+  if (!eventDrag || pointerEvent.pointerId !== eventDrag.pointerId) return;
+  const activeDrag = eventDrag;
+  if (activeDrag.started && !cancelled) updateEventDragPosition(pointerEvent.clientX, pointerEvent.clientY);
+  const targetDate = cancelled ? null : activeDrag.targetDate;
+  eventDrag = null;
+  clearEventDrag(activeDrag);
+  if (!activeDrag.started) return;
+  pointerEvent.preventDefault();
+  suppressCalendarClickUntil = performance.now() + 600;
+  if (targetDate && targetDate !== activeDrag.calendarEvent.event_date) {
+    moveEventToDate(activeDrag.calendarEvent, targetDate);
+  }
+}
+
+async function moveEventToDate(calendarEvent, targetDate) {
+  movingEventIds.add(calendarEvent.id);
+  showSavedEvent({ ...calendarEvent, event_date: targetDate });
+  invalidateMonthCache();
+  try {
+    const result = await api(`/api/events/${calendarEvent.id}`, { method: "PATCH", body: { event_date: targetDate } });
+    showSavedEvent(result.event);
+    const dateValue = parseDate(targetDate);
+    toast(`已移到 ${dateValue.getMonth() + 1}月${dateValue.getDate()}日`);
+  } catch (error) {
+    showSavedEvent(calendarEvent);
+    toast(`移动失败：${error.message}`);
+  } finally {
+    movingEventIds.delete(calendarEvent.id);
+    invalidateMonthCache();
+    try {
+      await loadMonth({ force: true });
+      refreshSearchIfVisible();
+    } catch (_error) {
+      toast("事件日期已处理；后台刷新暂时失败");
+    }
+  }
+}
+
 function renderMonth() {
   const year = state.cursor.getFullYear();
   const month = state.cursor.getMonth();
@@ -568,12 +766,19 @@ function renderMonth() {
     const maxVisible = visibleEventCapacity(events.length);
     events.slice(0, maxVisible).forEach((event) => {
       const chip = document.createElement("button");
-      chip.className = "event-chip";
+      chip.type = "button";
+      chip.className = "event-chip" + (movingEventIds.has(event.id) ? " event-moving" : "");
+      chip.dataset.eventId = event.id;
       chip.style.setProperty("--event-color", event.calendar_color);
       chip.style.setProperty("--event-text", readableTextColor(event.calendar_color));
       chip.textContent = event.title;
-      chip.title = event.title;
-      chip.addEventListener("click", (clickEvent) => { clickEvent.stopPropagation(); openDetail(event); });
+      chip.title = `${event.title}（可拖动到其他日期）`;
+      chip.setAttribute("aria-label", `${event.title}，${fullDateLabel(event.event_date)}。点击查看，鼠标拖动可改期`);
+      chip.addEventListener("pointerdown", beginEventDrag);
+      chip.addEventListener("click", (clickEvent) => {
+        clickEvent.stopPropagation();
+        if (!shouldSuppressCalendarClick()) openDetail(event);
+      });
       eventBox.append(chip);
     });
     if (events.length > maxVisible) {
@@ -592,7 +797,14 @@ function renderMonth() {
       eventBox.append(more);
     }
     cell.append(numberRow, eventBox);
-    cell.addEventListener("click", () => openEventEditor(null, key));
+    cell.addEventListener("click", (clickEvent) => {
+      if (shouldSuppressCalendarClick()) {
+        clickEvent.preventDefault();
+        clickEvent.stopPropagation();
+        return;
+      }
+      openEventEditor(null, key);
+    });
     cell.addEventListener("keydown", (event) => {
       if (event.target !== cell) return;
       if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openEventEditor(null, key); }
@@ -632,7 +844,11 @@ function syncMonthUrl(mode = "push") {
 }
 
 async function navigateToMonth(value, historyMode = "push") {
-  state.cursor = new Date(value.getFullYear(), value.getMonth(), 1);
+  const next = new Date(value.getFullYear(), value.getMonth(), 1);
+  const currentOrdinal = state.cursor.getFullYear() * 12 + state.cursor.getMonth();
+  const nextOrdinal = next.getFullYear() * 12 + next.getMonth();
+  state.monthAnimationDirection = Math.sign(nextOrdinal - currentOrdinal);
+  state.cursor = next;
   syncMonthUrl(historyMode);
   await loadMonth();
 }
@@ -1103,6 +1319,10 @@ els.sidebarResizer.addEventListener("pointerup", endSidebarResize);
 els.sidebarResizer.addEventListener("pointercancel", endSidebarResize);
 els.sidebarResizer.addEventListener("dblclick", () => { setSidebarWidth(SIDEBAR_WIDTH_DEFAULT); scheduleMonthRender(); });
 els.sidebarResizer.addEventListener("keydown", resizeSidebarWithKeyboard);
+els.monthGrid.addEventListener("pointermove", moveEventDrag);
+els.monthGrid.addEventListener("pointerup", (event) => finishEventDrag(event));
+els.monthGrid.addEventListener("pointercancel", (event) => finishEventDrag(event, true));
+els.monthGrid.addEventListener("lostpointercapture", (event) => finishEventDrag(event, true));
 document.addEventListener("click", (event) => {
   if (!els.accountMenu.hidden && !event.target.closest(".sidebar-account") && event.target !== els.mobileAccountButton) toggleAccountMenu(false);
   if (!els.eventCalendarMenu.hidden && !event.target.closest(".calendar-select-field")) toggleEventCalendarMenu(false);
@@ -1179,8 +1399,7 @@ document.addEventListener("visibilitychange", refreshMonthAfterReturning);
 window.addEventListener("popstate", () => {
   const value = monthFromPath();
   if (!value || els.appView.hidden) return;
-  state.cursor = value;
-  loadMonth().catch((error) => toast(error.message));
+  navigateToMonth(value, "replace").catch((error) => toast(error.message));
 });
 
 setSidebarWidth(storedSidebarWidth(), false);
