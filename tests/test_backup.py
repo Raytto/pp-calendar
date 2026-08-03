@@ -92,12 +92,17 @@ def test_existing_remote_weekly_is_not_uploaded_again(tmp_path, monkeypatch):
 
 def test_remote_listing_only_accepts_strict_weekly_names(monkeypatch):
     output = """
-    pp-calendar-weekly-2026-W31.sqlite -> /backup/pp-calendar/pp-calendar-weekly-2026-W31.sqlite
-    pp-calendar-weekly-2026-W32(1).sqlite -> /backup/pp-calendar/pp-calendar-weekly-2026-W32(1).sqlite
-    unrelated.sqlite -> /backup/pp-calendar/unrelated.sqlite
+    pp-calendar-weekly-2026-W31.sqlite -> /pphk/pp-calendar/pp-calendar-weekly-2026-W31.sqlite
+    pp-calendar-weekly-2026-W32(1).sqlite -> /pphk/pp-calendar/pp-calendar-weekly-2026-W32(1).sqlite
+    unrelated.sqlite -> /pphk/pp-calendar/unrelated.sqlite
     """
-    monkeypatch.setattr("deploy.backup.run_aliyunpan", lambda _config, *_args: output)
+    calls = []
+    monkeypatch.setattr(
+        "deploy.backup.run_aliyunpan",
+        lambda _config, *arguments: calls.append(arguments) or output,
+    )
     assert remote_weekly_names(BackupConfig()) == ["pp-calendar-weekly-2026-W31.sqlite"]
+    assert calls == [("tree", "--driveId", "69183113", "-fp", "/pphk/pp-calendar")]
 
 
 def test_cloud_rotation_removes_only_expired_strict_weekly(tmp_path, monkeypatch):
@@ -118,4 +123,11 @@ def test_cloud_rotation_removes_only_expired_strict_weekly(tmp_path, monkeypatch
     )
 
     sync_cloud_weeklies(config, target / "auto" / "weekly", target / "auto" / ".state")
-    assert calls == [("rm", "/backup/pp-calendar/pp-calendar-weekly-2026-W28.sqlite")]
+    assert calls == [
+        (
+            "rm",
+            "--driveId",
+            "69183113",
+            "/pphk/pp-calendar/pp-calendar-weekly-2026-W28.sqlite",
+        )
+    ]

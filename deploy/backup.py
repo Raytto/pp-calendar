@@ -27,7 +27,8 @@ class BackupConfig:
     source: Path = Path("/srv/data/pp-calendar/calendar.sqlite")
     target_root: Path = Path("/srv/backups/pp-calendar")
     cloud_stage: Path = Path("/srv/data/aliyunpan/uploads")
-    cloud_remote: str = "/backup/pp-calendar"
+    cloud_drive_id: str = "69183113"
+    cloud_remote: str = "/pphk/pp-calendar"
     aliyunpan: Path = Path("/usr/local/bin/aliyunpan")
     keep_daily: int = 5
     keep_weekly: int = 4
@@ -145,7 +146,9 @@ def run_aliyunpan(config: BackupConfig, *arguments: str) -> str:
 
 
 def remote_weekly_names(config: BackupConfig) -> list[str]:
-    output = run_aliyunpan(config, "tree", "-fp", config.cloud_remote)
+    output = run_aliyunpan(
+        config, "tree", "--driveId", config.cloud_drive_id, "-fp", config.cloud_remote
+    )
     return sorted(set(WEEKLY_PATTERN.findall(output)))
 
 
@@ -174,6 +177,8 @@ def upload_weekly(config: BackupConfig, weekly: Path) -> None:
         run_aliyunpan(
             config,
             "upload",
+            "--driveId",
+            config.cloud_drive_id,
             "--np",
             "--timeout",
             "60",
@@ -214,7 +219,13 @@ def sync_cloud_weeklies(config: BackupConfig, weekly_directory: Path, state_dire
     for expired in remote_names[:-config.keep_weekly]:
         if not WEEKLY_PATTERN.fullmatch(expired):
             raise RuntimeError(f"refusing to remove unexpected remote filename: {expired}")
-        run_aliyunpan(config, "rm", f"{config.cloud_remote}/{expired}")
+        run_aliyunpan(
+            config,
+            "rm",
+            "--driveId",
+            config.cloud_drive_id,
+            f"{config.cloud_remote}/{expired}",
+        )
 
 
 def run_backup(config: BackupConfig, now: datetime | None = None) -> BackupResult:

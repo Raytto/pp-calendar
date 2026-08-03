@@ -25,7 +25,7 @@ PP 私人日历，公网入口为 `https://calendar.pangruitao.com/`。功能借
 - 配置：`/etc/pp-calendar.env`（仅 root 可读，不进入 Git）
 - Nginx：`/etc/nginx/sites-available/pp-calendar.conf`
 - 证书：`/root/certs/calendar.pangruitao.com/`
-- 备份：`pp-calendar-backup.timer` 每日 03:26 后随机延迟不超过 10 分钟创建一次 SQLite 在线一致性快照；本机按日 5 份、周 4 份、月 6 份分层保留，周快照同步到阿里云盘备份盘 `/backup/pp-calendar/`
+- 备份：`pp-calendar-backup.timer` 每日 03:26 后随机延迟不超过 10 分钟创建一次 SQLite 在线一致性快照；本机按日 5 份、周 4 份、月 6 份分层保留，周快照同步到阿里云盘“备份文件”中的 `pphk/pp-calendar/`
 
 ## 本地开发与测试
 
@@ -51,7 +51,7 @@ uv run pytest -q
 - `/srv/backups/pp-calendar/manual/`：导入或批量修改前的人工快照，不参与自动轮换。
 - `/srv/backups/pp-calendar/legacy/`：GFS 上线前的旧快照，不参与自动轮换。
 
-同一日、周、月的本机快照优先使用硬链接，重复执行当天任务不会重复生成。每份新快照在原子发布前执行 SQLite `integrity_check`，成品统一为自包含的 DELETE journal 模式。周快照通过受控中转目录同步至阿里云盘备份盘 `/backup/pp-calendar/`，远端仅轮换严格匹配 `pp-calendar-weekly-YYYY-WNN.sqlite` 的文件并保留 4 周；云端失败不会撤销本机快照，任务会失败告警并在下一次运行时重试。
+同一日、周、月的本机快照优先使用硬链接，重复执行当天任务不会重复生成。每份新快照在原子发布前执行 SQLite `integrity_check`，成品统一为自包含的 DELETE journal 模式。周快照通过受控中转目录同步至阿里云盘备份盘 Drive ID `69183113` 的 `/pphk/pp-calendar/`，远端仅轮换严格匹配 `pp-calendar-weekly-YYYY-WNN.sqlite` 的文件并保留 4 周；Drive ID 在脚本中固定，不受 CLI 当前分区影响。云端失败不会撤销本机快照，任务会失败告警并在下一次运行时重试。
 
 ## Google Calendar 数据导入
 
