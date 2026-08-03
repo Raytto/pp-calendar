@@ -1,6 +1,7 @@
 [Unit]
 Description=Back up PP Calendar SQLite database
-After=pp-calendar.service
+Wants=network-online.target
+After=pp-calendar.service network-online.target
 
 [Service]
 Type=oneshot
@@ -11,5 +12,5 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/srv/data/pp-calendar /srv/backups/pp-calendar
+ReadWritePaths=/srv/data/pp-calendar /srv/backups/pp-calendar /srv/data/aliyunpan/config /srv/data/aliyunpan/uploads
 UMask=0077
