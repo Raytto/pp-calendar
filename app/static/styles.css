@@ -362,7 +362,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .month-title-button { max-width: 124px; }
   .month-title-button #monthTitle { max-width: 104px; overflow: hidden; text-overflow: ellipsis; }
   .calendar-view { grid-template-rows: 28px minmax(0,1fr); }
-  .month-grid { --cell-header-space: 29px; --event-chip-height: 16px; --event-row-gap: 1px; --more-events-height: 16px; }
+  .month-grid { --cell-header-space: 20px; --event-chip-height: 14px; --event-row-gap: 1px; --more-events-height: 14px; }
+  .day-cell { padding: 2px 1px 0; }
+  .day-number-row { min-height: 18px; }
+  .day-number { min-width: 18px; height: 18px; padding: 0 2px; font-size: 10px; }
   .event-chip { padding: 0 2px; border-radius: 3px; font-size: 8px; }
   .more-events { padding-left: 2px; border-radius: 3px; font-size: 8px; }
   .field-grid { grid-template-columns: 1fr; }

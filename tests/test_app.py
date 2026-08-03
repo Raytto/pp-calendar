@@ -46,7 +46,8 @@ def test_mobile_month_view_uses_compact_event_rows_without_shortcut_strip(tmp_pa
         assert month_page.status_code == 200
         assert "mobileMonthStrip" not in month_page.text
         assert "mobile-month-strip" not in styles.text
-        assert "--event-chip-height: 16px" in styles.text
+        assert "--cell-header-space: 20px" in styles.text
+        assert "--event-chip-height: 14px" in styles.text
         assert "--event-row-gap: 1px" in styles.text
         assert "renderMobileMonthStrip" not in script.text
 
