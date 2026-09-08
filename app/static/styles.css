@@ -226,7 +226,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .event-modal form { display: grid; gap: 18px; }
 .event-modal form[aria-busy="true"] { cursor: progress; }
 .event-modal form[aria-busy="true"] button:disabled { cursor: progress; opacity: .58; }
-.title-field input { min-height: 52px; border-width: 0 0 2px; border-radius: 0; font-size: 20px; }
+.title-field input { min-height: 44px; border-width: 0 0 2px; border-radius: 0; font-size: 16px; }
 .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .calendar-select-field { position: relative; min-width: 0; }
 .calendar-native-select { position: absolute !important; width: 1px !important; height: 1px; min-height: 0 !important; margin: 0; padding: 0 !important; overflow: hidden; border: 0 !important; opacity: 0; pointer-events: none; }
