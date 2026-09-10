@@ -63,4 +63,10 @@ delete --id ID
 - 隔离浏览器以1440×1000与390×844跑新建多图、详情缩略图、深链接、大图切换／放大、移除后取消、移除后保存，以及模拟成功响应丢失后的重试；无页面横向溢出、pageerror为0。
 - 手机尺寸自动化不能替代真实iPhone相机／Safari验收。真实生产验收结果记录在本机知识库的 PP Calendar 项目入口。
 
+## 依赖发布权限
+
+2026-09-10 首次发布确认：在宿主 root 的受限 umask／缓存环境下安装依赖，Pillow 的模块文件可能缺少服务用户的读取权限，导致低权限服务导入失败。安装后必须以 `pp-calendar` 用户实际执行 `from PIL import Image; import pillow_heif` 验证；不能仅以 root 测试通过代替。
+
+本次修复先用 `uv sync --frozen --reinstall-package pillow --reinstall-package pillow-heif --link-mode copy` 避免修改缓存硬链接，再仅对新安装的 `PIL`、`pillow*` 公开依赖目录及文件补齐可遍历／可读权限。业务数据、配置与凭据权限不变。服务恢复后公网完整链路通过。
+
 处理参考：[Pillow Image 文档](https://pillow.readthedocs.io/en/stable/reference/Image.html)、[pillow-heif 插件文档](https://pillow-heif.readthedocs.io/en/latest/pillow-plugin.html)。
