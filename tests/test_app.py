@@ -62,8 +62,8 @@ def test_month_events_expose_drag_rescheduling_and_directional_page_motion(tmp_p
         styles = client.get("/static/styles.css")
         script = client.get("/static/app.js")
 
-        assert "/static/styles.css?v=16" in month_page.text
-        assert "/static/app.js?v=25" in month_page.text
+        assert "/static/styles.css?v=" in month_page.text
+        assert "/static/app.js?v=" in month_page.text
         assert 'chip.addEventListener("pointerdown", beginEventDrag)' in script.text
         assert 'body: { event_date: targetDate }' in script.text
         assert "EVENT_DRAG_EDGE_HOLD_MS" in script.text

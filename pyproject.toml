@@ -5,6 +5,8 @@ description = "Private, day-precision calendar for PP"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi==0.116.1",
+  "pillow==12.3.0",
+  "pillow-heif==1.7.0",
   "uvicorn[standard]==0.35.0",
 ]
 

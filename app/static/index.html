@@ -8,7 +8,7 @@
   <title>PP Calendar</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <script src="/static/theme.js?v=1"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=17">
+  <link rel="stylesheet" href="/static/styles.css?v=18">
 </head>
 <body>
   <div id="loginView" class="login-page" hidden>
@@ -150,6 +150,11 @@
         </div>
       </div>
       <label><span>备注</span><textarea id="eventNotes" maxlength="10000" rows="7" placeholder="记录这个事件的细节…"></textarea></label>
+      <section class="event-image-section" aria-label="事件图片">
+        <label><span>图片</span><input id="eventImageInput" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" multiple></label>
+        <p class="image-hint">最多 12 张，每张不超过 20 MiB。选择或移除后点击保存生效。</p>
+        <div id="eventImages" class="event-images" aria-live="polite"></div>
+      </section>
       <p id="eventError" class="form-error" role="alert" hidden></p>
       <div class="modal-actions">
         <button id="deleteEventButton" class="danger-button" type="button" hidden>删除</button>
@@ -171,7 +176,24 @@
       <div><dt>日历</dt><dd id="detailCalendar"></dd></div>
       <div><dt>备注</dt><dd id="detailNotes" class="detail-notes"></dd></div>
     </dl>
+    <section id="detailImageSection" class="event-image-section" aria-label="事件图片" hidden>
+      <div id="detailImages" class="event-images" aria-live="polite"></div>
+    </section>
     <div class="modal-actions"><span></span><button id="editEventButton" class="primary-button compact">编辑事件</button></div>
+  </dialog>
+
+  <dialog id="imageViewer" class="modal image-viewer" aria-labelledby="imageViewerTitle">
+    <div class="image-viewer-heading">
+      <span id="imageViewerTitle">图片</span>
+      <button class="icon-button close-dialog" type="button" aria-label="关闭大图">×</button>
+    </div>
+    <div class="image-viewer-stage"><img id="imageViewerImage" alt="事件图片"></div>
+    <p id="imageViewerError" class="form-error" role="alert" hidden></p>
+    <div class="image-viewer-actions">
+      <button id="previousImage" class="text-button" type="button" aria-label="上一张图片">← 上一张</button>
+      <button id="imageZoom" class="text-button" type="button">放大</button>
+      <button id="nextImage" class="text-button" type="button" aria-label="下一张图片">下一张 →</button>
+    </div>
   </dialog>
 
   <dialog id="dayEventsDialog" class="modal day-events-modal" aria-labelledby="dayEventsTitle">
@@ -220,6 +242,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <script src="/static/app.js?v=25" defer></script>
+  <script src="/static/app.js?v=26" defer></script>
 </body>
 </html>

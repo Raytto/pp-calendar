@@ -258,6 +258,22 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .detail-list dt { color: #777b88; font-size: 12px; }
 .detail-list dd { margin: 0; font-size: 14px; }
 .detail-notes { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; }
+.event-image-section { min-width: 0; margin-bottom: 12px; }
+.image-hint { margin: 6px 0 12px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.event-images { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px; }
+.event-image-tile { min-width: 0; }
+.event-image-open { display: flex; align-items: center; justify-content: center; width: 100%; height: 100px; padding: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font-size: 12px; cursor: zoom-in; }
+.event-image-open img { width: 100%; height: 100%; object-fit: cover; }
+.event-image-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 4px; color: var(--muted); font-size: 11px; }
+.image-remove { width: 100%; min-height: 36px; font-size: 12px; }
+.image-viewer { width: min(1100px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 14px; }
+.image-viewer-heading, .image-viewer-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.image-viewer-heading { margin-bottom: 10px; }
+.image-viewer-heading span { min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
+.image-viewer-stage { overflow: auto; max-height: calc(100dvh - 165px); text-align: center; touch-action: pan-x pan-y pinch-zoom; }
+.image-viewer-stage img { display: block; margin: auto; max-width: 100%; max-height: calc(100dvh - 165px); object-fit: contain; }
+.image-viewer.zoomed .image-viewer-stage img { max-width: none; max-height: none; }
+.image-viewer-actions { margin-top: 10px; }
 .calendar-manage-list { max-height: 45vh; display: grid; gap: 8px; margin: 22px 0; overflow-y: auto; }
 .calendar-manage-row { display: grid; grid-template-columns: 34px minmax(0,1fr) auto auto; align-items: center; gap: 8px; padding: 9px; border: 1px solid var(--line); border-radius: 11px; }
 .calendar-manage-color { width: 24px; height: 24px; justify-self: center; border-radius: 50%; background: var(--calendar-color); }

@@ -18,6 +18,9 @@ from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Query, Requ
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from starlette.concurrency import run_in_threadpool
+
+from app.images import MAX_UPLOAD_BYTES, MAX_EVENT_IMAGES, prepare_image
 
 APP_ROOT = Path(__file__).resolve().parent
 STATIC_ROOT = APP_ROOT / "static"
@@ -153,6 +156,19 @@ def initialize_database() -> None:
             );
             CREATE INDEX IF NOT EXISTS events_date_idx ON events(event_date, id);
             CREATE INDEX IF NOT EXISTS events_calendar_idx ON events(calendar_id, event_date);
+            CREATE TABLE IF NOT EXISTS event_images (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                name TEXT NOT NULL,
+                source_sha256 TEXT NOT NULL,
+                width INTEGER NOT NULL,
+                height INTEGER NOT NULL,
+                size INTEGER NOT NULL,
+                image BLOB NOT NULL,
+                thumbnail BLOB NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(event_id, source_sha256)
+            );
             CREATE TABLE IF NOT EXISTS sessions (
                 token_hash TEXT PRIMARY KEY,
                 csrf_token TEXT NOT NULL,
@@ -287,11 +303,11 @@ async def security_headers(request: Request, call_next):
     response.headers["Referrer-Policy"] = "same-origin"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; "
+        "default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data: blob:; "
         "font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
     )
     if request.url.path.startswith("/api/"):
-        response.headers["Cache-Control"] = "no-store"
+        response.headers["Cache-Control"] = "private, no-store"
     return response
 
 
@@ -560,6 +576,117 @@ def get_event(event_id: int, _session: Annotated[sqlite3.Row, Depends(current_se
     if not row:
         raise HTTPException(404, "事件不存在")
     return {"event": event_view(row)}
+
+
+IMAGE_METADATA = "id,event_id,name,width,height,size,created_at"
+
+
+def image_view(row: sqlite3.Row) -> dict:
+    result = dict(row)
+    result["url"] = f"/api/events/{row['event_id']}/images/{row['id']}"
+    result["thumbnail_url"] = result["url"] + "?thumbnail=true"
+    return result
+
+
+def ensure_event(connection: sqlite3.Connection, event_id: int) -> None:
+    if not connection.execute("SELECT 1 FROM events WHERE id=?", (event_id,)).fetchone():
+        raise HTTPException(404, "事件不存在")
+
+
+@app.get("/api/events/{event_id}/images")
+def list_images(event_id: int, _session: Annotated[sqlite3.Row, Depends(current_session)]) -> dict:
+    with db() as connection:
+        ensure_event(connection, event_id)
+        rows = connection.execute(
+            f"SELECT {IMAGE_METADATA} FROM event_images WHERE event_id=? ORDER BY id", (event_id,)
+        ).fetchall()
+    return {"images": [image_view(row) for row in rows], "max_images": MAX_EVENT_IMAGES}
+
+
+def store_image(event_id: int, content: bytes, name: str) -> dict:
+    source_hash = hashlib.sha256(content).hexdigest()
+    # Check replays before decoding; the transaction below rechecks for concurrent uploads.
+    with db() as connection:
+        ensure_event(connection, event_id)
+        existing = connection.execute(
+            f"SELECT {IMAGE_METADATA} FROM event_images WHERE event_id=? AND source_sha256=?",
+            (event_id, source_hash),
+        ).fetchone()
+        if existing:
+            return {"image": image_view(existing), "replayed": True}
+    prepared = prepare_image(content)
+    with write_lock, db() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        ensure_event(connection, event_id)
+        existing = connection.execute(
+            f"SELECT {IMAGE_METADATA} FROM event_images WHERE event_id=? AND source_sha256=?",
+            (event_id, source_hash),
+        ).fetchone()
+        if existing:
+            return {"image": image_view(existing), "replayed": True}
+        count = connection.execute("SELECT COUNT(*) FROM event_images WHERE event_id=?", (event_id,)).fetchone()[0]
+        if count >= MAX_EVENT_IMAGES:
+            raise HTTPException(409, f"每个事件最多保存 {MAX_EVENT_IMAGES} 张图片")
+        cursor = connection.execute(
+            "INSERT INTO event_images(event_id,name,source_sha256,width,height,size,image,thumbnail,created_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?)",
+            (event_id, name, source_hash, prepared.width, prepared.height, len(prepared.image),
+             prepared.image, prepared.thumbnail, now_iso()),
+        )
+        connection.execute("UPDATE events SET updated_at=? WHERE id=?", (now_iso(), event_id))
+        connection.commit()
+        row = connection.execute(f"SELECT {IMAGE_METADATA} FROM event_images WHERE id=?", (cursor.lastrowid,)).fetchone()
+    return {"image": image_view(row), "replayed": False}
+
+
+@app.post("/api/events/{event_id}/images", status_code=201)
+async def upload_image(
+    event_id: int,
+    request: Request,
+    _session: Annotated[sqlite3.Row, Depends(csrf_session)],
+    name: Annotated[str, Query(min_length=1, max_length=200)] = "image",
+) -> dict:
+    # Raw file body avoids multipart staging/orphans. Never trust MIME or the filename as a decoder.
+    with db() as connection:
+        ensure_event(connection, event_id)
+    length = request.headers.get("content-length")
+    if length and (not length.isdecimal() or int(length) > MAX_UPLOAD_BYTES):
+        raise HTTPException(413, "图片不能超过 20 MiB")
+    content = bytearray()
+    async for chunk in request.stream():
+        if len(content) + len(chunk) > MAX_UPLOAD_BYTES:
+            raise HTTPException(413, "图片不能超过 20 MiB")
+        content.extend(chunk)
+    safe_name = name.replace("\\", "/").rsplit("/", 1)[-1]
+    safe_name = "".join(char for char in safe_name if char.isprintable())[:200] or "image"
+    return await run_in_threadpool(store_image, event_id, bytes(content), safe_name)
+
+
+@app.get("/api/events/{event_id}/images/{image_id}")
+def read_image(
+    event_id: int, image_id: int,
+    _session: Annotated[sqlite3.Row, Depends(current_session)],
+    thumbnail: bool = False,
+) -> Response:
+    column = "thumbnail" if thumbnail else "image"
+    with db() as connection:
+        row = connection.execute(
+            f"SELECT {column} FROM event_images WHERE id=? AND event_id=?", (image_id, event_id)
+        ).fetchone()
+    if not row:
+        raise HTTPException(404, "图片不存在")
+    return Response(row[0], media_type="image/webp", headers={"Content-Disposition": "inline"})
+
+
+@app.delete("/api/events/{event_id}/images/{image_id}")
+def delete_image(event_id: int, image_id: int, _session: Annotated[sqlite3.Row, Depends(csrf_session)]) -> dict:
+    with write_lock, db() as connection:
+        ensure_event(connection, event_id)
+        # Deleting the same image again is safe after an interrupted response.
+        connection.execute("DELETE FROM event_images WHERE id=? AND event_id=?", (image_id, event_id))
+        connection.execute("UPDATE events SET updated_at=? WHERE id=?", (now_iso(), event_id))
+        connection.commit()
+    return {"ok": True}
 
 
 def ensure_calendar(connection: sqlite3.Connection, calendar_id: int) -> None:
