@@ -29,7 +29,6 @@ USERNAME = os.getenv("PP_CALENDAR_USERNAME", "PP")
 PASSWORD_HASH = os.getenv("PP_CALENDAR_PASSWORD_HASH", "")
 COOKIE_NAME = "pp_calendar_session"
 SESSION_DAYS = 30
-MAX_EVENT_WINDOW_DAYS = 120
 LOGIN_WINDOW_SECONDS = 600
 LOGIN_ATTEMPT_LIMIT = 10
 MAX_LOGIN_CLIENTS = 4096
@@ -529,8 +528,6 @@ def list_events(
         end_date = query_date(end, "结束")
         if start_date > end_date:
             raise HTTPException(400, "开始日期不能晚于结束日期")
-        if (end_date - start_date).days > MAX_EVENT_WINDOW_DAYS:
-            raise HTTPException(400, f"日期范围不能超过 {MAX_EVENT_WINDOW_DAYS} 天")
         clauses.append("e.event_date>=?")
         values.append(start)
         clauses.append("e.event_date<=?")

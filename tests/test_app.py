@@ -182,7 +182,7 @@ def test_search_pagination_is_limited_to_one_hundred(tmp_path):
         assert client.get("/api/events?q=分页记录&page_size=101").status_code == 422
 
 
-def test_event_browsing_requires_a_bounded_valid_window(tmp_path):
+def test_event_browsing_requires_a_valid_window(tmp_path):
     with make_client(tmp_path) as client:
         login(client)
         calendar_id = client.get("/api/calendars").json()["calendars"][0]["id"]
@@ -191,8 +191,7 @@ def test_event_browsing_requires_a_bounded_valid_window(tmp_path):
         assert client.get("/api/events?start=2026-08-01").status_code == 400
         assert client.get("/api/events?start=2026-02-30&end=2026-03-01").status_code == 400
         assert client.get("/api/events?start=2026-09-01&end=2026-08-01").status_code == 400
-        assert client.get("/api/events?start=2026-01-01&end=2026-05-02").status_code == 400
-        assert client.get("/api/events?start=2026-01-01&end=2026-05-01").status_code == 200
+        assert client.get("/api/events?start=2026-01-01&end=2026-05-02").status_code == 200
         assert client.get(f"/api/events?q={'x' * 201}").status_code == 422
 
         with main.write_lock, main.db() as connection:
