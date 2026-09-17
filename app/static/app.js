@@ -8,6 +8,7 @@ const STANDARD_CALENDAR_COLORS = [
   "#E67C73", "#F6BF26", "#33B679", "#4285F4", "#9E69AF", "#A79B8E",
 ];
 const SIDEBAR_WIDTH_KEY = "pp-calendar-sidebar-width";
+const LAST_CREATED_CALENDAR_KEY = "pp-calendar-last-created-calendar";
 const SIDEBAR_WIDTH_DEFAULT = 280;
 const SIDEBAR_WIDTH_MIN = 220;
 const SIDEBAR_WIDTH_MAX = 520;
@@ -893,6 +894,13 @@ function openMonthJump() {
   els.monthJumpInput.focus();
 }
 
+function defaultEventCalendarId() {
+  let rememberedId;
+  try { rememberedId = Number(localStorage.getItem(LAST_CREATED_CALENDAR_KEY)); }
+  catch (_error) { /* Browser privacy settings may disable storage. */ }
+  return state.calendars.find((calendar) => calendar.id === rememberedId)?.id ?? state.calendars[0]?.id;
+}
+
 function openEventEditor(event = null, targetDate = null) {
   clearEditorImages();
   const generation = ++state.editorGeneration;
@@ -903,7 +911,7 @@ function openEventEditor(event = null, targetDate = null) {
   els.eventTitle.value = event?.title || "";
   els.eventDate.value = event?.event_date || targetDate || isoDate(new Date());
   els.eventNotes.value = event?.notes || "";
-  renderEventCalendarOptions(event?.calendar_id || state.calendars[0]?.id);
+  renderEventCalendarOptions(event?.calendar_id ?? defaultEventCalendarId());
   toggleEventCalendarMenu(false);
   els.deleteEventButton.hidden = !event;
   showError(els.eventError);
@@ -1127,6 +1135,7 @@ async function saveEvent(event) {
         method: "POST", body: payload, headers: { "Idempotency-Key": createRequestId },
       });
     savedEvent = result.event;
+    if (!editing) writeStoredJson(LAST_CREATED_CALENDAR_KEY, savedEvent.calendar_id);
     state.editingEvent = savedEvent;
     state.eventCreateRequestId = null;
     showSavedEvent(savedEvent);
