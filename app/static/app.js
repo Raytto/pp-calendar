@@ -52,6 +52,7 @@ const state = {
   monthAnimationDirection: 0,
   editorImages: [],
   editorImagesLoading: false,
+  editorImagesError: false,
   editorGeneration: 0,
   detailGeneration: 0,
   viewerImages: [],
@@ -84,6 +85,9 @@ const els = {
   calendarCreatePalette: $("#calendarCreatePalette"), sidebarScrollRegion: $("#sidebarScrollRegion"),
   sidebarResizer: $("#sidebarResizer"),
   eventImageInput: $("#eventImageInput"), eventImages: $("#eventImages"),
+  eventImageSection: $("#eventImageSection"), imageUploadButton: $("#imageUploadButton"),
+  eventImageCount: $("#eventImageCount"), imageStatus: $("#imageStatus"),
+  imageRemovalList: $("#imageRemovalList"), imageInputError: $("#imageInputError"),
   detailImageSection: $("#detailImageSection"), detailImages: $("#detailImages"),
   imageViewer: $("#imageViewer"), imageViewerImage: $("#imageViewerImage"),
   imageViewerTitle: $("#imageViewerTitle"), imageViewerError: $("#imageViewerError"),
@@ -176,6 +180,7 @@ function setEventFormSaving(saving) {
     control.disabled = saving;
   });
   els.eventSaveButton.textContent = saving ? "保存中…" : "保存";
+  updateImageControls();
 }
 
 function visibleEventCapacity(eventCount) {
@@ -917,24 +922,26 @@ function openEventEditor(event = null, targetDate = null) {
   showError(els.eventError);
   els.eventDialog.showModal();
   els.eventTitle.focus();
-  if (event) {
-    state.editorImagesLoading = true;
-    els.eventImages.textContent = "正在加载图片…";
-    els.eventImageInput.disabled = true;
-    els.eventSaveButton.disabled = true;
-    api(`/api/events/${event.id}/images`).then((result) => {
-      if (generation !== state.editorGeneration || !els.eventDialog.open) return;
-      state.editorImages = result.images;
-      renderEditorImages();
-    }).catch((error) => {
-      if (generation !== state.editorGeneration) return;
-      showError(els.eventError, `图片加载失败：${error.message}。请关闭后重新打开。`);
-    }).finally(() => {
-      if (generation !== state.editorGeneration) return;
+  if (event) loadEditorImages(event, generation);
+}
+
+async function loadEditorImages(event, generation) {
+  state.editorImagesLoading = true;
+  state.editorImagesError = false;
+  renderEditorImages();
+  try {
+    const result = await api(`/api/events/${event.id}/images`);
+    if (generation !== state.editorGeneration || !els.eventDialog.open) return;
+    state.editorImages = result.images;
+  } catch (error) {
+    if (generation !== state.editorGeneration) return;
+    state.editorImagesError = true;
+    showError(els.imageInputError, `图片加载失败：${error.message}`);
+  } finally {
+    if (generation === state.editorGeneration) {
       state.editorImagesLoading = false;
-      els.eventImageInput.disabled = false;
-      els.eventSaveButton.disabled = false;
-    });
+      renderEditorImages();
+    }
   }
 }
 
@@ -953,6 +960,7 @@ function openDetail(event) {
     if (generation !== state.detailGeneration || !els.detailDialog.open) return;
     els.detailImages.replaceChildren();
     els.detailImageSection.hidden = result.images.length === 0;
+    $("#detailImageCount").textContent = `${result.images.length} 张`;
     result.images.forEach((item, index) => els.detailImages.append(imageTile(item, () => openImageViewer(result.images, index))));
   }).catch((error) => {
     if (generation === state.detailGeneration && els.detailDialog.open) els.detailImages.textContent = `图片加载失败：${error.message}`;
@@ -963,70 +971,140 @@ function clearEditorImages() {
   state.editorImages.forEach((item) => { if (item.preview) URL.revokeObjectURL(item.preview); });
   state.editorImages = [];
   state.editorImagesLoading = false;
+  state.editorImagesError = false;
+  els.eventImageSection.classList.remove("is-dragging");
+  showError(els.imageInputError);
   els.eventImageInput.value = "";
-  els.eventImages.replaceChildren();
+  renderEditorImages();
 }
 
-function imageTile(item, onClick) {
+function imageTile(item, onClick, disabled = false) {
   const tile = document.createElement("div");
   tile.className = "event-image-tile";
   const button = document.createElement("button");
   button.type = "button";
   button.className = "event-image-open";
   button.setAttribute("aria-label", `查看图片：${item.name}`);
+  button.disabled = disabled;
   const image = document.createElement("img");
   image.src = item.thumbnail_url || item.preview;
   image.alt = item.name;
   image.loading = "lazy";
   image.addEventListener("error", () => {
-    button.textContent = item.file ? "待上传图片" : "图片加载失败，点击重试";
-  });
+    const fallback = document.createElement("span");
+    fallback.className = "image-fallback";
+    fallback.textContent = item.file ? "保存后可查看预览" : "预览不可用，点击查看";
+    image.replaceWith(fallback);
+  }, { once: true });
   button.append(image);
+  if (item.file) {
+    const badge = document.createElement("span");
+    badge.className = "image-badge";
+    badge.dataset.status = item.uploadStatus || "pending";
+    badge.textContent = item.uploadStatus === "uploading" ? "上传中…" : item.uploadStatus === "failed" ? "上传失败" : "待保存";
+    button.append(badge);
+  }
   button.addEventListener("click", onClick);
   const name = document.createElement("span");
   name.className = "event-image-name";
   name.textContent = item.name;
+  name.title = item.name;
   tile.append(button, name);
   return tile;
 }
 
+function updateImageControls() {
+  const count = state.editorImages.filter((item) => !item.removed).length;
+  const blocked = state.eventSaveInFlight || state.editorImagesLoading || state.editorImagesError;
+  els.eventImageCount.textContent = `${count} / 12`;
+  els.imageUploadButton.disabled = blocked || count >= 12;
+  els.eventImageInput.disabled = blocked || count >= 12;
+  els.eventSaveButton.disabled = blocked;
+  $("#imageUploadTitle").textContent = count >= 12 ? "已添加 12 张图片" : count ? "继续添加图片" : "添加图片";
+  $("#imageLoadRetry").hidden = !state.editorImagesError;
+  const added = state.editorImages.filter((item) => item.file && !item.removed).length;
+  const removed = state.editorImages.filter((item) => item.removed).length;
+  els.imageStatus.textContent = state.editorImagesLoading ? "正在加载图片…"
+    : state.editorImagesError ? "请重新加载图片后继续编辑。"
+    : state.eventSaveInFlight ? "正在保存，请稍候…"
+    : added || removed ? [added ? `${added} 张待添加` : "", removed ? `${removed} 张待移除` : ""].filter(Boolean).join(" · ") + "，点击保存后生效。"
+    : count ? "点击图片查看大图，移除后可撤销。" : "添加后点击保存，与事件一起记录。";
+}
+
 function renderEditorImages() {
   els.eventImages.replaceChildren();
-  state.editorImages.filter((item) => !item.removed).forEach((item) => {
-    const tile = imageTile(item, () => {
-      const images = state.editorImages.filter((entry) => !entry.removed);
-      openImageViewer(images, images.indexOf(item));
-    });
+  els.imageRemovalList.replaceChildren();
+  const images = state.editorImages.filter((item) => !item.removed);
+  images.forEach((item, index) => {
+    const tile = imageTile(item, () => openImageViewer(images, index), state.eventSaveInFlight);
     const remove = document.createElement("button");
     remove.type = "button";
-    remove.className = "text-button image-remove";
-    remove.textContent = "移除";
+    remove.className = "image-remove";
+    const cross = document.createElement("span");
+    cross.textContent = "×";
+    cross.setAttribute("aria-hidden", "true");
+    remove.append(cross);
+    remove.title = "移除图片";
     remove.setAttribute("aria-label", `移除图片：${item.name}`);
     remove.disabled = state.eventSaveInFlight;
     remove.addEventListener("click", () => {
       item.removed = true;
       renderEditorImages();
+      els.imageRemovalList.querySelectorAll("button")[state.editorImages.filter((entry) => entry.removed).indexOf(item)]?.focus({ preventScroll: true });
     });
     tile.append(remove);
     els.eventImages.append(tile);
   });
+  state.editorImages.filter((item) => item.removed).forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "image-removal-row";
+    const name = document.createElement("span");
+    name.textContent = `待移除 · ${item.name}`;
+    name.title = item.name;
+    const undo = document.createElement("button");
+    undo.type = "button";
+    undo.className = "text-button";
+    undo.textContent = "撤销";
+    undo.setAttribute("aria-label", `撤销移除：${item.name}`);
+    undo.disabled = state.eventSaveInFlight || images.length >= 12;
+    undo.addEventListener("click", () => {
+      item.removed = false;
+      renderEditorImages();
+      const index = state.editorImages.filter((entry) => !entry.removed).indexOf(item);
+      els.eventImages.children[index]?.querySelector(".image-remove").focus({ preventScroll: true });
+    });
+    row.append(name, undo);
+    els.imageRemovalList.append(row);
+  });
+  els.imageRemovalList.hidden = !els.imageRemovalList.children.length;
+  updateImageControls();
 }
 
-function chooseEventImages() {
-  showError(els.eventError);
-  for (const file of els.eventImageInput.files) {
-    if (file.size > 20 * 1024 * 1024 || file.size === 0) {
-      showError(els.eventError, `${file.name} 为空或超过 20 MiB`);
+function chooseEventImages(files = els.eventImageInput.files) {
+  if (state.eventSaveInFlight || state.editorImagesLoading || state.editorImagesError) return;
+  showError(els.imageInputError);
+  const errors = [];
+  for (const file of files) {
+    if (!/^image\/(jpeg|png|webp|heic|heif|heic-sequence|heif-sequence)$/i.test(file.type) && !/\.(jpe?g|png|webp|heic|heif)$/i.test(file.name)) {
+      errors.push(`${file.name}：请选择 JPG、PNG、WebP 或 HEIC 图片`);
       continue;
     }
+    if (file.size > 20 * 1024 * 1024 || file.size === 0) {
+      errors.push(`${file.name} 为空或超过 20 MB`);
+      continue;
+    }
+    const existing = state.editorImages.find((item) => item.file && item.file.name === file.name && item.file.size === file.size && item.file.lastModified === file.lastModified);
+    if (existing && !existing.removed) continue;
     if (state.editorImages.filter((item) => !item.removed).length >= 12) {
-      showError(els.eventError, "每个事件最多保存 12 张图片");
+      errors.push("每个事件最多保存 12 张图片，其余图片未添加");
       break;
     }
-    state.editorImages.push({ file, name: file.name, preview: URL.createObjectURL(file) });
+    if (existing) existing.removed = false;
+    else state.editorImages.push({ file, name: file.name, preview: URL.createObjectURL(file) });
   }
   els.eventImageInput.value = "";
   renderEditorImages();
+  if (errors.length) showError(els.imageInputError, errors.join("；"));
 }
 
 async function saveEventImages(eventId) {
@@ -1040,15 +1118,26 @@ async function saveEventImages(eventId) {
   }
   for (const item of state.editorImages) {
     if (!item.file) continue;
-    const result = await api(`/api/events/${eventId}/images?name=${encodeURIComponent(item.name.slice(0, 200))}`, {
+    item.uploadStatus = "uploading";
+    renderEditorImages();
+    let result;
+    try {
+      result = await api(`/api/events/${eventId}/images?name=${encodeURIComponent(item.name.slice(0, 200))}`, {
       method: "POST", body: item.file, headers: { "Content-Type": item.file.type || "application/octet-stream" },
     });
+    } catch (error) {
+      item.uploadStatus = "failed";
+      throw error;
+    }
     if (item.preview) URL.revokeObjectURL(item.preview);
     Object.assign(item, result.image, { file: null, preview: null });
   }
+  // The server may deduplicate identical content selected under different filenames.
+  state.editorImages = state.editorImages.filter((item, index, items) => !item.id || items.findIndex((entry) => entry.id === item.id) === index);
 }
 
 function openImageViewer(images, index) {
+  $("#imageViewerStrip").replaceChildren();
   state.viewerImages = images;
   state.viewerIndex = index;
   renderImageViewer();
@@ -1061,11 +1150,34 @@ function renderImageViewer() {
   els.imageViewer.classList.remove("zoomed");
   $("#imageZoom").textContent = "放大";
   showError(els.imageViewerError);
-  els.imageViewerTitle.textContent = `${state.viewerIndex + 1} / ${state.viewerImages.length} · ${item.name}`;
+  els.imageViewerTitle.textContent = item.name;
+  $("#imageViewerCount").textContent = `${state.viewerIndex + 1} / ${state.viewerImages.length}`;
   els.imageViewerImage.alt = item.name;
   els.imageViewerImage.src = item.url || item.preview;
   $("#previousImage").disabled = state.viewerIndex === 0;
   $("#nextImage").disabled = state.viewerIndex === state.viewerImages.length - 1;
+  const strip = $("#imageViewerStrip");
+  // Keep buttons mounted so keyboard focus survives a thumbnail selection.
+  if (strip.children.length !== state.viewerImages.length) strip.replaceChildren();
+  state.viewerImages.forEach((entry, index) => {
+    let button = strip.children[index];
+    if (!button) {
+      button = document.createElement("button");
+      button.type = "button";
+      button.className = "image-viewer-thumb";
+      const thumb = document.createElement("img");
+      thumb.src = entry.thumbnail_url || entry.preview;
+      thumb.alt = "";
+      thumb.addEventListener("error", () => { thumb.replaceWith(document.createTextNode(String(index + 1))); }, { once: true });
+      button.append(thumb);
+      button.setAttribute("aria-label", `查看第 ${index + 1} 张：${entry.name}`);
+      button.addEventListener("click", () => { state.viewerIndex = index; renderImageViewer(); });
+      strip.append(button);
+    }
+    button.setAttribute("aria-current", String(index === state.viewerIndex));
+  });
+  strip.hidden = state.viewerImages.length < 2;
+  strip.children[state.viewerIndex]?.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
 function openDayEvents(eventDate, events, anchor) {
@@ -1116,7 +1228,7 @@ function openDayEvents(eventDate, events, anchor) {
 async function saveEvent(event) {
   event.preventDefault();
   if (state.eventSaveInFlight) return;
-  if (state.editorImagesLoading) return;
+  if (state.editorImagesLoading || state.editorImagesError) return;
   setEventFormSaving(true);
   showError(els.eventError);
   const payload = {
@@ -1412,7 +1524,45 @@ els.monthJumpForm.addEventListener("submit", (event) => {
   navigateToMonth(new Date(Number(match[1]), Number(match[2]) - 1, 1)).catch((error) => toast(error.message));
 });
 els.eventForm.addEventListener("submit", saveEvent);
-els.eventImageInput.addEventListener("change", chooseEventImages);
+els.eventImageInput.addEventListener("change", () => chooseEventImages());
+els.imageUploadButton.addEventListener("click", () => els.eventImageInput.click());
+$("#imageLoadRetry").addEventListener("click", () => {
+  showError(els.imageInputError);
+  loadEditorImages(state.editingEvent, state.editorGeneration);
+});
+let imageDragDepth = 0;
+els.eventImageSection.addEventListener("dragenter", (event) => {
+  if (!Array.from(event.dataTransfer.types).includes("Files")) return;
+  event.preventDefault();
+  imageDragDepth++;
+  if (!els.imageUploadButton.disabled) els.eventImageSection.classList.add("is-dragging");
+});
+els.eventImageSection.addEventListener("dragover", (event) => {
+  if (!Array.from(event.dataTransfer.types).includes("Files")) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = els.imageUploadButton.disabled ? "none" : "copy";
+});
+els.eventImageSection.addEventListener("dragleave", () => {
+  imageDragDepth = Math.max(0, imageDragDepth - 1);
+  if (!imageDragDepth) els.eventImageSection.classList.remove("is-dragging");
+});
+els.eventImageSection.addEventListener("drop", (event) => {
+  event.preventDefault();
+  imageDragDepth = 0;
+  els.eventImageSection.classList.remove("is-dragging");
+  chooseEventImages(event.dataTransfer.files);
+});
+els.eventDialog.addEventListener("paste", (event) => {
+  if (els.imageViewer.open || !event.clipboardData?.files.length) return;
+  event.preventDefault();
+  chooseEventImages(event.clipboardData.files);
+});
+$("#manageImagesButton").addEventListener("click", () => {
+  const event = state.selectedEvent;
+  els.detailDialog.close();
+  openEventEditor(event);
+  els.eventImageSection.scrollIntoView({ block: "center" });
+});
 $("#previousImage").addEventListener("click", () => { state.viewerIndex--; renderImageViewer(); });
 $("#nextImage").addEventListener("click", () => { state.viewerIndex++; renderImageViewer(); });
 $("#imageZoom").addEventListener("click", () => {
@@ -1421,8 +1571,10 @@ $("#imageZoom").addEventListener("click", () => {
 });
 els.imageViewerImage.addEventListener("error", () => showError(els.imageViewerError, "暂时无法显示图片。HEIC 图片保存后即可查看；已保存图片请重新登录或重试。"));
 els.imageViewer.addEventListener("close", () => {
+  if (els.imageViewer.open) return;
   els.imageViewerImage.removeAttribute("src");
   state.viewerImages = [];
+  $("#imageViewerStrip").replaceChildren();
 });
 els.imageViewer.addEventListener("keydown", (event) => {
   if (event.key === "ArrowLeft" && state.viewerIndex > 0) { event.preventDefault(); state.viewerIndex--; renderImageViewer(); }
@@ -1485,6 +1637,8 @@ els.eventCalendarMenu.addEventListener("keydown", (event) => {
   if (target) { event.preventDefault(); target.focus(); }
 });
 els.eventDialog.addEventListener("close", () => {
+  // A queued close event can arrive after the editor has already reopened.
+  if (els.eventDialog.open) return;
   toggleEventCalendarMenu(false);
   state.editorGeneration++;
   clearEditorImages();
