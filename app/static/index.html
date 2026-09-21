@@ -8,7 +8,7 @@
   <title>PP Calendar</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <script src="/static/theme.js?v=1"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=19">
+  <link rel="stylesheet" href="/static/styles.css?v=20">
 </head>
 <body>
   <div id="loginView" class="login-page" hidden>
@@ -129,42 +129,44 @@
     </div>
   </div>
 
-  <dialog id="eventDialog" class="modal event-modal">
+  <dialog id="eventDialog" class="modal event-modal" aria-labelledby="eventDialogTitle">
     <form id="eventForm" method="dialog">
       <div class="modal-heading">
         <div><p class="eyebrow">DAY EVENT</p><h2 id="eventDialogTitle">新建事件</h2></div>
         <button id="eventCloseButton" class="icon-button close-dialog" type="button" aria-label="关闭">×</button>
       </div>
-      <label class="title-field"><span>标题</span><input id="eventTitle" maxlength="200" placeholder="添加标题" required></label>
-      <div class="field-grid">
-        <label><span>日期</span><input id="eventDate" type="date" required></label>
-        <div class="form-field calendar-select-field">
-          <span class="field-label">所属日历</span>
-          <select id="eventCalendar" class="calendar-native-select" required tabindex="-1" aria-hidden="true"></select>
-          <button id="eventCalendarButton" class="calendar-select-button" type="button" aria-haspopup="listbox" aria-expanded="false">
-            <span id="eventCalendarName" class="calendar-select-name"></span>
-            <span id="eventCalendarColor" class="calendar-select-color" aria-hidden="true"></span>
-            <span class="calendar-select-caret" aria-hidden="true">⌄</span>
-          </button>
-          <div id="eventCalendarMenu" class="calendar-select-menu" role="listbox" aria-label="选择所属日历" hidden></div>
+      <div id="eventFormBody" class="event-form-body">
+        <label class="title-field"><span>标题</span><input id="eventTitle" maxlength="200" placeholder="添加标题" required></label>
+        <div class="field-grid">
+          <label><span>日期</span><input id="eventDate" type="date" required></label>
+          <div class="form-field calendar-select-field">
+            <span class="field-label">所属日历</span>
+            <select id="eventCalendar" class="calendar-native-select" required tabindex="-1" aria-hidden="true"></select>
+            <button id="eventCalendarButton" class="calendar-select-button" type="button" aria-haspopup="listbox" aria-expanded="false">
+              <span id="eventCalendarName" class="calendar-select-name"></span>
+              <span id="eventCalendarColor" class="calendar-select-color" aria-hidden="true"></span>
+              <span class="calendar-select-caret" aria-hidden="true">⌄</span>
+            </button>
+            <div id="eventCalendarMenu" class="calendar-select-menu" role="listbox" aria-label="选择所属日历" hidden></div>
+          </div>
         </div>
+        <label><span>备注</span><textarea id="eventNotes" maxlength="10000" rows="7" placeholder="记录这个事件的细节…"></textarea></label>
+        <section id="eventImageSection" class="event-image-section image-editor" aria-labelledby="eventImageHeading">
+          <div class="image-section-heading"><h3 id="eventImageHeading">图片</h3><span id="eventImageCount" class="image-count">0 / 12</span></div>
+          <input id="eventImageInput" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" multiple hidden aria-label="选择图片">
+          <button id="imageUploadButton" class="image-upload-zone" type="button" aria-describedby="imageUploadHint">
+            <span class="image-upload-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m3 16 5-5 4 4 3-3 6 6"/></svg></span>
+            <span class="image-upload-copy"><strong id="imageUploadTitle">添加图片</strong><span>选择照片，或拖放到这里</span></span>
+            <span class="image-upload-plus" aria-hidden="true">＋</span>
+          </button>
+          <p id="imageUploadHint" class="image-hint">JPG、PNG、WebP、HEIC · 每张 ≤ 20 MB · 支持粘贴</p>
+          <div id="eventImages" class="event-images"></div>
+          <div id="imageRemovalList" class="image-removal-list" hidden></div>
+          <div class="image-section-footer"><p id="imageStatus" class="image-status" role="status">添加后点击保存，与事件一起记录。</p><button id="imageLoadRetry" class="text-button" type="button" hidden>重新加载</button></div>
+          <p id="imageInputError" class="form-error" role="alert" hidden></p>
+        </section>
+        <p id="eventError" class="form-error" role="alert" hidden></p>
       </div>
-      <label><span>备注</span><textarea id="eventNotes" maxlength="10000" rows="7" placeholder="记录这个事件的细节…"></textarea></label>
-      <section id="eventImageSection" class="event-image-section image-editor" aria-labelledby="eventImageHeading">
-        <div class="image-section-heading"><h3 id="eventImageHeading">图片</h3><span id="eventImageCount" class="image-count">0 / 12</span></div>
-        <input id="eventImageInput" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" multiple hidden aria-label="选择图片">
-        <button id="imageUploadButton" class="image-upload-zone" type="button" aria-describedby="imageUploadHint">
-          <span class="image-upload-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m3 16 5-5 4 4 3-3 6 6"/></svg></span>
-          <span class="image-upload-copy"><strong id="imageUploadTitle">添加图片</strong><span>选择照片，或拖放到这里</span></span>
-          <span class="image-upload-plus" aria-hidden="true">＋</span>
-        </button>
-        <p id="imageUploadHint" class="image-hint">JPG、PNG、WebP、HEIC · 每张 ≤ 20 MB · 支持粘贴</p>
-        <div id="eventImages" class="event-images"></div>
-        <div id="imageRemovalList" class="image-removal-list" hidden></div>
-        <div class="image-section-footer"><p id="imageStatus" class="image-status" role="status">添加后点击保存，与事件一起记录。</p><button id="imageLoadRetry" class="text-button" type="button" hidden>重新加载</button></div>
-        <p id="imageInputError" class="form-error" role="alert" hidden></p>
-      </section>
-      <p id="eventError" class="form-error" role="alert" hidden></p>
       <div class="modal-actions">
         <button id="deleteEventButton" class="danger-button" type="button" hidden>删除</button>
         <span></span>
@@ -253,6 +255,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <script src="/static/app.js?v=28" defer></script>
+  <script src="/static/app.js?v=29" defer></script>
 </body>
 </html>

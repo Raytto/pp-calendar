@@ -65,7 +65,7 @@ const els = {
   monthGrid: $("#monthGrid"), miniCalendar: $("#miniCalendar"), calendarFilters: $("#calendarFilters"),
   calendarView: $("#calendarView"), searchView: $("#searchView"), searchInput: $("#searchInput"),
   searchSummary: $("#searchSummary"), searchResults: $("#searchResults"), searchPagination: $("#searchPagination"), eventDialog: $("#eventDialog"),
-  eventForm: $("#eventForm"), eventDialogTitle: $("#eventDialogTitle"), eventTitle: $("#eventTitle"),
+  eventForm: $("#eventForm"), eventFormBody: $("#eventFormBody"), eventDialogTitle: $("#eventDialogTitle"), eventTitle: $("#eventTitle"),
   eventDate: $("#eventDate"), eventCalendar: $("#eventCalendar"), eventNotes: $("#eventNotes"),
   eventCalendarButton: $("#eventCalendarButton"), eventCalendarName: $("#eventCalendarName"),
   eventCalendarColor: $("#eventCalendarColor"), eventCalendarMenu: $("#eventCalendarMenu"),
@@ -906,6 +906,24 @@ function defaultEventCalendarId() {
   return state.calendars.find((calendar) => calendar.id === rememberedId)?.id ?? state.calendars[0]?.id;
 }
 
+function syncEventEditorViewport() {
+  const viewport = window.visualViewport;
+  // Pinch zoom should remain under the user's control; only follow keyboard/pan changes at 1x.
+  if (viewport && Math.abs(viewport.scale - 1) > 0.05) return;
+  els.eventDialog.style.setProperty("--editor-viewport-height", `${viewport?.height ?? window.innerHeight}px`);
+  els.eventDialog.style.setProperty("--editor-viewport-top", `${viewport?.offsetTop ?? 0}px`);
+}
+
+let editorViewportFrame;
+function scheduleEditorViewportSync() {
+  if (!els.eventDialog.open) return;
+  cancelAnimationFrame(editorViewportFrame);
+  editorViewportFrame = requestAnimationFrame(syncEventEditorViewport);
+}
+window.addEventListener("resize", scheduleEditorViewportSync);
+window.visualViewport?.addEventListener("resize", scheduleEditorViewportSync);
+window.visualViewport?.addEventListener("scroll", scheduleEditorViewportSync);
+
 function openEventEditor(event = null, targetDate = null) {
   clearEditorImages();
   const generation = ++state.editorGeneration;
@@ -920,8 +938,10 @@ function openEventEditor(event = null, targetDate = null) {
   toggleEventCalendarMenu(false);
   els.deleteEventButton.hidden = !event;
   showError(els.eventError);
+  syncEventEditorViewport();
   els.eventDialog.showModal();
-  els.eventTitle.focus();
+  els.eventFormBody.scrollTop = 0;
+  els.eventTitle.focus({ preventScroll: true });
   if (event) loadEditorImages(event, generation);
 }
 
@@ -1257,6 +1277,7 @@ async function saveEvent(event) {
     showError(els.eventError, savedEvent ? `事件文字已保存，图片尚未全部处理：${error.message}。可移除失败图片或点击保存重试。` : error.message);
     setEventFormSaving(false);
     renderEditorImages();
+    els.eventError.scrollIntoView({ block: "nearest" });
     if (savedEvent) {
       els.eventDialogTitle.textContent = "编辑事件";
       els.deleteEventButton.hidden = false;
